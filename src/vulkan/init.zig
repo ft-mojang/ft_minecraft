@@ -33,6 +33,8 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
+var instance: Instance = undefined;
+
 pub fn initVulkan(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
@@ -62,6 +64,9 @@ pub fn initVulkan(
 
     const instance_handle = try vkb.createInstance(&instance_create_info, null);
     const vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
-    const instance = Instance.init(instance_handle, &vki);
-    defer instance.destroyInstance(null);
+    instance = Instance.init(instance_handle, &vki);
+}
+
+pub fn deinitVulkan() void {
+    instance.destroyInstance(null);
 }

@@ -43,6 +43,7 @@ pub fn main() !void {
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
     try vk_init.initVulkan(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
+    defer vk_init.deinitVulkan();
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
