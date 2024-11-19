@@ -1,37 +1,40 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
 const std = @import("std");
 
+const vk = @import("vulkan");
+const glfw = @import("mach-glfw");
+
+const window_title = "ft_minecraft";
+const window_width = 640;
+const window_height = 480;
+
+fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
+    std.log.err("{}: {s}\n", .{ error_code, description });
+}
+
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    glfw.setErrorCallback(logGLFWError);
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    if (!glfw.init(.{})) {
+        std.log.err("failed to initialize GLFW: {?s}", .{glfw.getErrorString()});
+        return error.GLFWInitFailed;
+    }
+    defer glfw.terminate();
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    if (!glfw.vulkanSupported()) {
+        std.log.err("host does not support Vulkan", .{});
+        return error.GLFWInitFailed;
+    }
 
-    try bw.flush(); // Don't forget to flush!
-}
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-test "fuzz example" {
-    const global = struct {
-        fn testOne(input: []const u8) anyerror!void {
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
+    const window = glfw.Window.create(window_width, window_height, window_title, null, null, .{
+        .client_api = .no_api,
+        .resizable = false,
+    }) orelse {
+        std.log.err("failed to create GLFW window: {?s}", .{glfw.getErrorString()});
+        return error.CreateWindowFailed;
     };
-    try std.testing.fuzz(global.testOne, .{});
+    defer window.destroy();
+
+    while (!window.shouldClose()) {
+        glfw.pollEvents();
+    }
 }

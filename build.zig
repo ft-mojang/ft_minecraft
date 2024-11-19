@@ -27,6 +27,26 @@ pub fn build(b: *std.Build) void {
     // step when running `zig build`).
     b.installArtifact(exe);
 
+    const dep_mach_glfw = b.dependency("mach_glfw", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.root_module.addImport("mach-glfw", dep_mach_glfw.module("mach-glfw"));
+
+    // Get the (lazy) path to vk.xml:
+    const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
+    // Get generator executable reference
+    const vk_gen = b.dependency("vulkan_zig", .{}).artifact("vulkan-zig-generator");
+    // Set up a run step to generate the bindings
+    const vk_generate_cmd = b.addRunArtifact(vk_gen);
+    // Pass the registry to the generator
+    vk_generate_cmd.addFileArg(registry);
+    // Add the generator's output as a module
+    exe.root_module.addAnonymousImport("vulkan", .{
+        .root_source_file = vk_generate_cmd.addOutputFileArg("vk.zig"),
+    });
+
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
     // such a dependency.
