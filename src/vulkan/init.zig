@@ -24,7 +24,7 @@ const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,
     .application_version = 0,
     .engine_version = 0,
-    .p_application_name = "scop",
+    .p_application_name = "ft_minecraft",
 };
 
 const validation_layers = [_][*:0]const u8{
