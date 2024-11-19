@@ -3,6 +3,8 @@ const std = @import("std");
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
+const vk_init = @import("vulkan/init.zig");
+
 const window_title = "ft_minecraft";
 const window_width = 640;
 const window_height = 480;
@@ -25,6 +27,11 @@ pub fn main() !void {
         return error.GLFWInitFailed;
     }
 
+    const glfw_extensions = glfw.getRequiredInstanceExtensions() orelse {
+        std.log.err("failed to get required vulkan instance extensions: {?s}", .{glfw.getErrorString()});
+        return error.GLFWInitFailed;
+    };
+
     const window = glfw.Window.create(window_width, window_height, window_title, null, null, .{
         .client_api = .no_api,
         .resizable = false,
@@ -33,6 +40,9 @@ pub fn main() !void {
         return error.CreateWindowFailed;
     };
     defer window.destroy();
+
+    const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
+    try vk_init.initVulkan(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
