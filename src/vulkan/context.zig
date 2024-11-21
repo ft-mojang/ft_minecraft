@@ -33,6 +33,8 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
+var vkb: BaseDispatch = undefined;
+var vki: InstanceDispatch = undefined;
 var instance: Instance = undefined;
 
 pub fn init(
@@ -40,7 +42,7 @@ pub fn init(
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
 ) !void {
-    const vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
+    vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
 
     if (try vkb.enumerateInstanceVersion() < app_info.api_version)
         return error.InitializationFailed;
@@ -63,7 +65,7 @@ pub fn init(
     };
 
     const instance_handle = try vkb.createInstance(&instance_create_info, null);
-    const vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
+    vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
     instance = Instance.init(instance_handle, &vki);
 }
 
