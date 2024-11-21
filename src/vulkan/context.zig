@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
 
-const apis: []const vk.ApiInfo = &.{
+pub const apis: []const vk.ApiInfo = &.{
     vk.features.version_1_0,
     vk.features.version_1_1,
     vk.features.version_1_2,
@@ -20,6 +20,8 @@ const Device = vk.DeviceProxy(apis);
 const Queue = vk.QueueProxy(apis);
 const CommandBuffer = vk.CommandBufferProxy(apis);
 
+const QueueFamilies = struct { graphics_queue: i32, present_queue: i32 };
+
 const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,
     .application_version = 0,
@@ -34,6 +36,8 @@ const validation_layers = [_][*:0]const u8{
 const instance_extensions = [_][*:0]const u8{};
 
 var instance: Instance = undefined;
+var physical_device: vk.PhysicalDevice = undefined;
+var queue_families: QueueFamilies = undefined;
 
 pub fn init(
     allocator: Allocator,
@@ -69,4 +73,117 @@ pub fn init(
 
 pub fn deinit() void {
     instance.destroyInstance(null);
+}
+
+// scores the devices based on supported extensions, surfaces and queues
+fn pickPhysicalDevice(surface: vk.SurfaceKHR, allocator: Allocator) !vk.PhysicalDevice {
+    const available_devices = try instance.enumeratePhysicalDevicesAlloc(allocator);
+    defer allocator.free(available_devices);
+
+    var max_score = undefined;
+    var max_device = undefined;
+
+    for (available_devices) |pdev| {
+        const extension_score = checkExtensionSupport(pdev, allocator) catch continue;
+        const surface_score = checkSurfaceSupport(pdev, surface, allocator) catch continue;
+        const queue_score = checkDeviceQueueSupport(pdev, surface, allocator) catch continue;
+        if (!max_score or max_score < extension_score + surface_score + queue_score) {
+            max_score = extension_score + surface_score + queue_score;
+            max_device = pdev;
+        }
+    }
+    if (max_device) {
+        allocDeviceQueues(max_device, surface, allocator);
+        return max_device;
+    }
+    return error.NoSuitableDevice;
+}
+
+fn checkExtensionSupport(pdev: vk.PhysicalDevice, allocator: Allocator) !u32 {
+    const device_properties = try instance.enumerateDeviceExtensionPropertiesAlloc(pdev, null, allocator);
+    defer allocator.free(device_properties);
+
+    for (instance_extensions) |extension| {
+        for (device_properties) |property| {
+            if (std.mem.eql(u8, property.extension_name, extension))
+                break;
+        } else {
+            return error.ExtensionNotPresent;
+        }
+    }
+    return device_properties.len;
+}
+
+fn checkSurfaceSupport(pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !u32 {
+    var format_count: u32 = undefined;
+    _ = try instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, surface, &format_count, null);
+
+    var present_mode_count: u32 = undefined;
+    _ = try instance.getPhysicalDeviceSurfacePresentModesKHR(pdev, surface, &present_mode_count, null);
+    var present_modes = allocator.alloc(vk.PresentModeKHR, present_mode_count);
+    _ = try instance.getPhysicalDeviceSurfacePresentModesKHR(pdev, surface, &present_mode_count, &present_modes);
+    // check if the device supports vk::PresentModeKHR::eFifo, according to https://docs.vulkan.org/samples/latest/samples/performance/hpp_swapchain_images/README.html
+    for (present_modes) |mode| {
+        if (mode.efifo)
+            break;
+    } else {
+        return error.FeatureNotPresent;
+    }
+
+    if (format_count > 0 and present_mode_count > 0)
+        return format_count + present_mode_count;
+    return error.FeatureNotPresent;
+}
+
+fn checkDeviceQueueSupport(pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !i32 {
+    const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
+    defer allocator.free(families);
+
+    var graphics_family: ?u32 = null;
+    var present_family: ?u32 = null;
+
+    for (families, 0..) |properties, i| {
+        const family: u32 = @intCast(i);
+
+        if (graphics_family == null and properties.queue_flags.graphics_bit) {
+            graphics_family = family;
+        }
+
+        if (present_family == null and (try instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, surface)) == vk.TRUE) {
+            present_family = family;
+        }
+    }
+
+    if (graphics_family != null and present_family != null) {
+        return families.len;
+    }
+
+    return error.FeatureNotPresent;
+}
+
+fn allocDeviceQueues(pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !void {
+    const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
+    defer allocator.free(families);
+
+    var graphics_family: ?u32 = null;
+    var present_family: ?u32 = null;
+
+    for (families, 0..) |properties, i| {
+        const family: u32 = @intCast(i);
+
+        if (graphics_family == null and properties.queue_flags.graphics_bit) {
+            graphics_family = family;
+        }
+
+        if (present_family == null and (try instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, surface)) == vk.TRUE) {
+            present_family = family;
+        }
+    }
+
+    if (graphics_family != null and present_family != null) {
+        queue_families = .{ .graphics_queue = graphics_family, .present_family = present_family };
+    }
+
+    // sanity check
+    return error.FeatureNotPresent;
 }
