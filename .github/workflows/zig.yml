@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: zig fmt check
+name: Zig CI
 
 # Controls when the workflow will run
 on:
@@ -16,7 +16,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  build:
+  zig:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -25,12 +25,23 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      # Runs a set of commands using the runners shell
-      - name: fetch zig
-        run: curl -o zig.tar.xz https://ziglang.org/builds/zig-linux-x86-0.14.0-dev.2254+73f2671c7.tar.xz
+      - name: Install VulkanSDK
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+          sudo apt update
+          sudo apt install vulkan-sdk -y
 
-      - name: unpack
-        run: mkdir gh-zig && tar xf zig.tar.xz -C gh-zig --strip-components 1
+      - name: Fetch & unpack zig
+        run: |
+          curl -o zig.tar.xz https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.2254+73f2671c7.tar.xz
+          mkdir -p gh-zig && tar xf zig.tar.xz -C gh-zig --strip-components 1
 
-      - name: validate formatting
+      - name: Validate formatting
         run: ./gh-zig/zig fmt --check src
+
+      - name: Build ft_minecraft
+        run: ./gh-zig/zig build
+
+      - name: Run tests
+        run: ./gh-zig/zig build test
