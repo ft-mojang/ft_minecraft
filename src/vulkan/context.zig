@@ -35,7 +35,7 @@ const instance_extensions = [_][*:0]const u8{};
 
 var instance: Instance = undefined;
 
-pub fn initVulkan(
+pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
@@ -67,6 +67,6 @@ pub fn initVulkan(
     instance = Instance.init(instance_handle, &vki);
 }
 
-pub fn deinitVulkan() void {
+pub fn deinit() void {
     instance.destroyInstance(null);
 }

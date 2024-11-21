@@ -3,7 +3,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
-const vk_init = @import("vulkan/init.zig");
+const vk_ctx = @import("vulkan/context.zig");
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -42,8 +42,8 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    try vk_init.initVulkan(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
-    defer vk_init.deinitVulkan();
+    try vk_ctx.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
+    defer vk_ctx.deinit();
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
