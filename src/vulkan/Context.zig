@@ -1,17 +1,12 @@
+//! Context struct/type
+
 const std = @import("std");
 const builtin = @import("builtin");
+const vk = @import("vulkan");
 const Allocator = std.mem.Allocator;
 
-const vk = @import("vulkan");
-
-const apis: []const vk.ApiInfo = &.{
-    vk.features.version_1_0,
-    vk.features.version_1_1,
-    vk.features.version_1_2,
-    vk.extensions.khr_surface,
-    vk.extensions.khr_swapchain,
-};
-
+// Private constant member types
+const Self = @This(); // This is not necessary, but Self is a little more readable than @This()
 const BaseDispatch = vk.BaseWrapper(apis);
 const InstanceDispatch = vk.InstanceWrapper(apis);
 const Instance = vk.InstanceProxy(apis);
@@ -19,6 +14,15 @@ const DeviceDispatch = vk.DeviceWrapper(apis);
 const Device = vk.DeviceProxy(apis);
 const Queue = vk.QueueProxy(apis);
 const CommandBuffer = vk.CommandBufferProxy(apis);
+
+// Private constants
+const apis: []const vk.ApiInfo = &.{
+    vk.features.version_1_0,
+    vk.features.version_1_1,
+    vk.features.version_1_2,
+    vk.extensions.khr_surface,
+    vk.extensions.khr_swapchain,
+};
 
 const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,
@@ -33,18 +37,22 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
-var vkb: BaseDispatch = undefined;
-var vki: InstanceDispatch = undefined;
-var instance: Instance = undefined;
+// Context fields
+vkb: BaseDispatch = undefined,
+vki: InstanceDispatch = undefined,
+instance: Instance = undefined,
 
+// Context methods
 pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
-) !void {
-    vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
+) !Self { // Factory-style "constructor"
+    var self: Self = undefined;
 
-    if (try vkb.enumerateInstanceVersion() < app_info.api_version)
+    self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
+
+    if (try self.vkb.enumerateInstanceVersion() < app_info.api_version)
         return error.InitializationFailed;
 
     var enabled_instance_extensions = try std.ArrayList([*:0]const u8)
@@ -64,11 +72,13 @@ pub fn init(
         .pp_enabled_extension_names = enabled_instance_extensions.items.ptr,
     };
 
-    const instance_handle = try vkb.createInstance(&instance_create_info, null);
-    vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
-    instance = Instance.init(instance_handle, &vki);
+    const instance_handle = try self.vkb.createInstance(&instance_create_info, null);
+    self.vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
+    self.instance = Instance.init(instance_handle, &self.vki);
+
+    return self;
 }
 
-pub fn deinit() void {
-    instance.destroyInstance(null);
+pub fn deinit(self: Self) void {
+    self.instance.destroyInstance(null);
 }

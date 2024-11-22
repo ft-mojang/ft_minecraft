@@ -1,9 +1,23 @@
-const std = @import("std");
+// The intended folder hierarchy here is like
+//
+// - src
+//  - single_file_module.zig
+//  - multi_file_module/
+//    - multi_file_module.zig
+//    - MultiFileModuleType.zig
+//    - AnotherType.zig
+//
+// Modules should re-export their types, so they are accessible through the namespace import. See below
 
+const std = @import("std");
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
-const vk_ctx = @import("vulkan/context.zig");
+// Import a namespace (or "module").
+const vulkan = @import("vulkan/vulkan.zig");
+
+// Import types from from that namespace.
+const VulkanContext = vulkan.Context;
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -42,8 +56,11 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    try vk_ctx.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
+    var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
     defer vk_ctx.deinit();
+
+    // Using a namespaced utility function without having to import non-types (functions) to scope.
+    vulkan.utilityFunction();
 
     while (!window.shouldClose()) {
         glfw.pollEvents();
