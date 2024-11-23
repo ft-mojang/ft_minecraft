@@ -10,6 +10,12 @@ const window_title = "ft_minecraft";
 const window_width = 640;
 const window_height = 480;
 
+fn update() void {}
+
+fn render(interpolation_alpha: f64) void {
+    _ = interpolation_alpha;
+}
+
 fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
     std.log.err("{}: {s}\n", .{ error_code, description });
 }
@@ -46,7 +52,24 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
     defer vk_ctx.deinit();
 
+    const fixed_time_step: f64 = 1.0 / 60.0;
+    var accumulated_update_time: f64 = 0.0;
+    var prev_time: f64 = 0;
+    glfw.setTime(0);
     while (!window.shouldClose()) {
+        const curr_time = glfw.getTime();
+        const delta_time = curr_time - prev_time;
+        accumulated_update_time += delta_time;
+
         glfw.pollEvents();
+
+        while (accumulated_update_time >= fixed_time_step) {
+            accumulated_update_time -= fixed_time_step;
+            update();
+        }
+
+        render(accumulated_update_time / fixed_time_step);
+
+        prev_time = curr_time;
     }
 }
