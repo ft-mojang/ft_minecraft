@@ -42,8 +42,8 @@ pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
-) !Self {
-    var self: Self = undefined;
+) !*Self {
+    var self: *Self = try allocator.create(Self);
 
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
 
@@ -74,6 +74,6 @@ pub fn init(
     return self;
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     self.instance.destroyInstance(null);
 }
