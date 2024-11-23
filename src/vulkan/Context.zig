@@ -1,21 +1,18 @@
-//! Context struct/type
-
 const std = @import("std");
 const builtin = @import("builtin");
-const vk = @import("vulkan");
 const Allocator = std.mem.Allocator;
 
-// Private constant member types
-const Self = @This(); // This is not necessary, but Self is a little more readable than @This()
+const vk = @import("vulkan");
+
+const Self = @This();
 const BaseDispatch = vk.BaseWrapper(apis);
 const InstanceDispatch = vk.InstanceWrapper(apis);
-const Instance = vk.InstanceProxy(apis);
 const DeviceDispatch = vk.DeviceWrapper(apis);
+const Instance = vk.InstanceProxy(apis);
 const Device = vk.DeviceProxy(apis);
 const Queue = vk.QueueProxy(apis);
 const CommandBuffer = vk.CommandBufferProxy(apis);
 
-// Private constants
 const apis: []const vk.ApiInfo = &.{
     vk.features.version_1_0,
     vk.features.version_1_1,
@@ -37,17 +34,15 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
-// Context fields
 vkb: BaseDispatch = undefined,
 vki: InstanceDispatch = undefined,
 instance: Instance = undefined,
 
-// Context methods
 pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
-) !Self { // Factory-style "constructor"
+) !Self {
     var self: Self = undefined;
 
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
