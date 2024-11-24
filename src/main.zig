@@ -10,7 +10,10 @@ const window_title = "ft_minecraft";
 const window_width = 640;
 const window_height = 480;
 
-fn update() void {}
+fn update(t: f64, dt: f64) void {
+    _ = t;
+    _ = dt;
+}
 
 fn render(interpolation_alpha: f64) void {
     _ = interpolation_alpha;
@@ -53,9 +56,9 @@ pub fn main() !void {
     defer vk_ctx.deinit();
 
     const fixed_time_step: f64 = 1.0 / 60.0;
+    var simulation_time: f64 = 0.0;
     var accumulated_update_time: f64 = 0.0;
-    var prev_time: f64 = 0;
-    glfw.setTime(0);
+    var prev_time: f64 = glfw.getTime();
     while (!window.shouldClose()) {
         const curr_time = glfw.getTime();
         const delta_time = curr_time - prev_time;
@@ -64,8 +67,9 @@ pub fn main() !void {
         glfw.pollEvents();
 
         while (accumulated_update_time >= fixed_time_step) {
+            update(simulation_time, delta_time);
             accumulated_update_time -= fixed_time_step;
-            update();
+            simulation_time += fixed_time_step;
         }
 
         render(accumulated_update_time / fixed_time_step);
