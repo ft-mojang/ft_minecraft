@@ -55,7 +55,8 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
     defer vk_ctx.deinit();
 
-    const fixed_time_step: f64 = 1.0 / 60.0;
+    const max_updates_per_loop = 8;
+    const fixed_time_step = 1.0 / 60.0;
     var simulation_time: f64 = 0.0;
     var accumulated_update_time: f64 = 0.0;
     var prev_time: f64 = glfw.getTime();
@@ -66,10 +67,12 @@ pub fn main() !void {
 
         glfw.pollEvents();
 
-        while (accumulated_update_time >= fixed_time_step) {
+        var update_count: u8 = 0;
+        while (accumulated_update_time >= fixed_time_step and update_count <= max_updates_per_loop) {
             update(simulation_time, delta_time);
             accumulated_update_time -= fixed_time_step;
             simulation_time += fixed_time_step;
+            update_count += 1;
         }
 
         render(accumulated_update_time / fixed_time_step);
