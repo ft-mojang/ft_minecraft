@@ -34,6 +34,7 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
+allocator: Allocator = undefined,
 vkb: BaseDispatch = undefined,
 vki: InstanceDispatch = undefined,
 instance: Instance = undefined,
@@ -42,8 +43,11 @@ pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
-) !Self {
-    var self: Self = undefined;
+) !*Self {
+    var self: *Self = try allocator.create(Self);
+    errdefer allocator.destroy(self);
+
+    self.allocator = allocator;
 
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
 
@@ -74,6 +78,7 @@ pub fn init(
     return self;
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     self.instance.destroyInstance(null);
+    self.allocator.destroy(self);
 }
