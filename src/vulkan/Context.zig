@@ -91,6 +91,7 @@ pub fn init(
 }
 
 pub fn deinit(self: *Self) void {
+    self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
     self.allocator.destroy(self);
 }
@@ -105,8 +106,8 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
 
     for (available_devices) |pdev| {
         const extension_score = self.checkExtensionSupport(pdev, allocator) catch continue;
-        const surface_score = self.checkSurfaceSupport(pdev, self.surface, allocator) catch continue;
-        const queue_score = self.checkDeviceQueueSupport(pdev, self.surface, allocator) catch continue;
+        const surface_score = self.checkSurfaceSupport(pdev, allocator) catch continue;
+        const queue_score = self.checkDeviceQueueSupport(pdev, allocator) catch continue;
         const score = extension_score + surface_score + queue_score;
         if (max_score < score) {
             max_score = score;
@@ -114,13 +115,17 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
         }
     }
     if (max_score != 0) {
-        _ = try self.allocDeviceQueues(max_device, self.surface, allocator);
+        _ = try self.allocDeviceQueues(max_device, allocator);
         return max_device;
     }
     return error.NoSuitableDevice;
 }
 
-fn checkExtensionSupport(self: Self, pdev: vk.PhysicalDevice, allocator: Allocator) !u64 {
+fn checkExtensionSupport(
+    self: Self,
+    pdev: vk.PhysicalDevice,
+    allocator: Allocator,
+) !u64 {
     const device_properties = try self.instance.enumerateDeviceExtensionPropertiesAlloc(pdev, null, allocator);
     defer allocator.free(device_properties);
 
@@ -135,20 +140,28 @@ fn checkExtensionSupport(self: Self, pdev: vk.PhysicalDevice, allocator: Allocat
     return device_properties.len;
 }
 
-fn checkSurfaceSupport(self: Self, pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !u32 {
+fn checkSurfaceSupport(
+    self: Self,
+    pdev: vk.PhysicalDevice,
+    allocator: Allocator,
+) !u32 {
     _ = allocator;
     var format_count: u32 = undefined;
-    _ = try self.instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, surface, &format_count, null);
+    _ = try self.instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, self.surface, &format_count, null);
 
     var present_mode_count: u32 = undefined;
-    _ = try self.instance.getPhysicalDeviceSurfacePresentModesKHR(pdev, surface, &present_mode_count, null);
+    _ = try self.instance.getPhysicalDeviceSurfacePresentModesKHR(pdev, self.surface, &present_mode_count, null);
 
     if (format_count > 0 and present_mode_count > 0)
         return format_count + present_mode_count;
     return error.FeatureNotPresent;
 }
 
-fn checkDeviceQueueSupport(self: Self, pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !u64 {
+fn checkDeviceQueueSupport(
+    self: Self,
+    pdev: vk.PhysicalDevice,
+    allocator: Allocator,
+) !u64 {
     const families = try self.instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
     defer allocator.free(families);
 
@@ -162,7 +175,7 @@ fn checkDeviceQueueSupport(self: Self, pdev: vk.PhysicalDevice, surface: vk.Surf
             graphics_family = family;
         }
 
-        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, surface)) == vk.TRUE) {
+        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, self.surface)) == vk.TRUE) {
             present_family = family;
         }
     }
@@ -174,7 +187,11 @@ fn checkDeviceQueueSupport(self: Self, pdev: vk.PhysicalDevice, surface: vk.Surf
     return error.FeatureNotPresent;
 }
 
-fn allocDeviceQueues(self: *Self, pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !void {
+fn allocDeviceQueues(
+    self: *Self,
+    pdev: vk.PhysicalDevice,
+    allocator: Allocator,
+) !void {
     const families = try self.instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
     defer allocator.free(families);
 
@@ -188,7 +205,7 @@ fn allocDeviceQueues(self: *Self, pdev: vk.PhysicalDevice, surface: vk.SurfaceKH
             graphics_family = family;
         }
 
-        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, surface)) == vk.TRUE) {
+        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, self.surface)) == vk.TRUE) {
             present_family = family;
         }
     }
