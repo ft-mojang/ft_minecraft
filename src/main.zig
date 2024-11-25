@@ -42,7 +42,7 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    try vk_ctx.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions);
+    try vk_ctx.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
     while (!window.shouldClose()) {
