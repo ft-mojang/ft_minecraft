@@ -4,23 +4,22 @@ const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
 
-pub const apis: []const vk.ApiInfo = &.{
+const Self = @This();
+const BaseDispatch = vk.BaseWrapper(apis);
+const InstanceDispatch = vk.InstanceWrapper(apis);
+const DeviceDispatch = vk.DeviceWrapper(apis);
+const Instance = vk.InstanceProxy(apis);
+const Device = vk.DeviceProxy(apis);
+const Queue = vk.QueueProxy(apis);
+const CommandBuffer = vk.CommandBufferProxy(apis);
+
+const apis: []const vk.ApiInfo = &.{
     vk.features.version_1_0,
     vk.features.version_1_1,
     vk.features.version_1_2,
     vk.extensions.khr_surface,
     vk.extensions.khr_swapchain,
 };
-
-const BaseDispatch = vk.BaseWrapper(apis);
-const InstanceDispatch = vk.InstanceWrapper(apis);
-const Instance = vk.InstanceProxy(apis);
-const DeviceDispatch = vk.DeviceWrapper(apis);
-const Device = vk.DeviceProxy(apis);
-const Queue = vk.QueueProxy(apis);
-const CommandBuffer = vk.CommandBufferProxy(apis);
-
-const QueueFamilies = struct { graphics_queue: i32, present_queue: i32 };
 
 const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,
@@ -35,18 +34,24 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
-var instance: Instance = undefined;
-var physical_device: vk.PhysicalDevice = undefined;
-var queue_families: QueueFamilies = undefined;
+allocator: Allocator = undefined,
+vkb: BaseDispatch = undefined,
+vki: InstanceDispatch = undefined,
+instance: Instance = undefined,
 
 pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
-) !void {
-    const vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
+) !*Self {
+    var self: *Self = try allocator.create(Self);
+    errdefer allocator.destroy(self);
 
-    if (try vkb.enumerateInstanceVersion() < app_info.api_version)
+    self.allocator = allocator;
+
+    self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
+
+    if (try self.vkb.enumerateInstanceVersion() < app_info.api_version)
         return error.InitializationFailed;
 
     var enabled_instance_extensions = try std.ArrayList([*:0]const u8)
@@ -66,13 +71,16 @@ pub fn init(
         .pp_enabled_extension_names = enabled_instance_extensions.items.ptr,
     };
 
-    const instance_handle = try vkb.createInstance(&instance_create_info, null);
-    const vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
-    instance = Instance.init(instance_handle, &vki);
+    const instance_handle = try self.vkb.createInstance(&instance_create_info, null);
+    self.vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
+    self.instance = Instance.init(instance_handle, &self.vki);
+
+    return self;
 }
 
-pub fn deinit() void {
-    instance.destroyInstance(null);
+pub fn deinit(self: *Self) void {
+    self.instance.destroyInstance(null);
+    self.allocator.destroy(self);
 }
 
 // scores the devices based on supported extensions, surfaces and queues
