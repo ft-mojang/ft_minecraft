@@ -105,9 +105,9 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
     var max_device: vk.PhysicalDevice = undefined;
 
     for (available_devices) |pdev| {
-        const extension_score = self.checkExtensionSupport(pdev, allocator) catch continue;
-        const surface_score = self.checkSurfaceSupport(pdev, allocator) catch continue;
-        const queue_score = self.checkDeviceQueueSupport(pdev, allocator) catch continue;
+        const extension_score = self.checkExtensionSupport(allocator, pdev) catch continue;
+        const surface_score = self.checkSurfaceSupport(allocator, pdev) catch continue;
+        const queue_score = self.checkDeviceQueueSupport(allocator, pdev) catch continue;
         const score = extension_score + surface_score + queue_score;
         if (max_score < score) {
             max_score = score;
@@ -115,7 +115,7 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
         }
     }
     if (max_score != 0) {
-        _ = try self.allocDeviceQueues(max_device, allocator);
+        _ = try self.allocDeviceQueues(allocator, max_device);
         return max_device;
     }
     return error.NoSuitableDevice;
@@ -123,8 +123,8 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
 
 fn checkExtensionSupport(
     self: Self,
-    pdev: vk.PhysicalDevice,
     allocator: Allocator,
+    pdev: vk.PhysicalDevice,
 ) !u64 {
     const device_properties = try self.instance.enumerateDeviceExtensionPropertiesAlloc(pdev, null, allocator);
     defer allocator.free(device_properties);
@@ -142,8 +142,8 @@ fn checkExtensionSupport(
 
 fn checkSurfaceSupport(
     self: Self,
-    pdev: vk.PhysicalDevice,
     allocator: Allocator,
+    pdev: vk.PhysicalDevice,
 ) !u32 {
     _ = allocator;
     var format_count: u32 = undefined;
@@ -159,8 +159,8 @@ fn checkSurfaceSupport(
 
 fn checkDeviceQueueSupport(
     self: Self,
-    pdev: vk.PhysicalDevice,
     allocator: Allocator,
+    pdev: vk.PhysicalDevice,
 ) !u64 {
     const families = try self.instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
     defer allocator.free(families);
@@ -189,8 +189,8 @@ fn checkDeviceQueueSupport(
 
 fn allocDeviceQueues(
     self: *Self,
-    pdev: vk.PhysicalDevice,
     allocator: Allocator,
+    pdev: vk.PhysicalDevice,
 ) !void {
     const families = try self.instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
     defer allocator.free(families);
