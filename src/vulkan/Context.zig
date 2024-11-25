@@ -141,7 +141,7 @@ fn checkExtensionSupport(
     return device_properties.len;
 }
 
-fn checkSurfaceSupport(self: Self, pdev: vk.PhysicalDevice) !u32 {
+fn checkSurfaceSupport(self: *Self, pdev: vk.PhysicalDevice) !u32 {
     var format_count: u32 = undefined;
     _ = try self.instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, self.surface, &format_count, null);
 
