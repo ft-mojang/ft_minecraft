@@ -3,6 +3,8 @@ const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
+// for the surface
+const glfw = @import("mach-glfw");
 
 const Self = @This();
 const BaseDispatch = vk.BaseWrapper(apis);
@@ -39,11 +41,7 @@ vkb: BaseDispatch = undefined,
 vki: InstanceDispatch = undefined,
 instance: Instance = undefined,
 
-pub fn init(
-    allocator: Allocator,
-    fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
-    platform_instance_extensions: [][*:0]const u8,
-) !*Self {
+pub fn init(allocator: Allocator, fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr, platform_instance_extensions: [][*:0]const u8, window: glfw.Window) !*Self {
     var self: *Self = try allocator.create(Self);
     errdefer allocator.destroy(self);
 
@@ -71,11 +69,15 @@ pub fn init(
         .pp_enabled_extension_names = enabled_instance_extensions.items.ptr,
     };
 
-    const instance_handle = try self.vkb.createInstance(&instance_create_info, null);
-    self.vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
-    self.instance = Instance.init(instance_handle, &self.vki);
+    const instance_handle = try vkb.createInstance(&instance_create_info, null);
+    const vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
+    instance = Instance.init(instance_handle, &vki);
 
-    return self;
+    var surface: vk.SurfaceKHR = undefined;
+    if (glfw.createWindowSurface(instance_handle, window, null, &surface) != 0)
+        return error.SurfaceLostKHR;
+
+    physical_device = try pickPhysicalDevice(surface, allocator);
 }
 
 pub fn deinit(self: *Self) void {
@@ -88,26 +90,27 @@ fn pickPhysicalDevice(surface: vk.SurfaceKHR, allocator: Allocator) !vk.Physical
     const available_devices = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(available_devices);
 
-    var max_score = undefined;
-    var max_device = undefined;
+    // score cant be less then 0 anyway
+    var max_score: u64 = 0;
+    var max_device: vk.PhysicalDevice = undefined;
 
     for (available_devices) |pdev| {
         const extension_score = checkExtensionSupport(pdev, allocator) catch continue;
         const surface_score = checkSurfaceSupport(pdev, surface, allocator) catch continue;
         const queue_score = checkDeviceQueueSupport(pdev, surface, allocator) catch continue;
-        if (!max_score or max_score < extension_score + surface_score + queue_score) {
+        if (max_score < extension_score + surface_score + queue_score) {
             max_score = extension_score + surface_score + queue_score;
             max_device = pdev;
         }
     }
-    if (max_device) {
-        allocDeviceQueues(max_device, surface, allocator);
+    if (max_score != 0) {
+        _ = try allocDeviceQueues(max_device, surface, allocator);
         return max_device;
     }
     return error.NoSuitableDevice;
 }
 
-fn checkExtensionSupport(pdev: vk.PhysicalDevice, allocator: Allocator) !u32 {
+fn checkExtensionSupport(pdev: vk.PhysicalDevice, allocator: Allocator) !u64 {
     const device_properties = try instance.enumerateDeviceExtensionPropertiesAlloc(pdev, null, allocator);
     defer allocator.free(device_properties);
 
@@ -123,27 +126,19 @@ fn checkExtensionSupport(pdev: vk.PhysicalDevice, allocator: Allocator) !u32 {
 }
 
 fn checkSurfaceSupport(pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !u32 {
+    _ = allocator;
     var format_count: u32 = undefined;
     _ = try instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, surface, &format_count, null);
 
     var present_mode_count: u32 = undefined;
     _ = try instance.getPhysicalDeviceSurfacePresentModesKHR(pdev, surface, &present_mode_count, null);
-    var present_modes = allocator.alloc(vk.PresentModeKHR, present_mode_count);
-    _ = try instance.getPhysicalDeviceSurfacePresentModesKHR(pdev, surface, &present_mode_count, &present_modes);
-    // check if the device supports vk::PresentModeKHR::eFifo, according to https://docs.vulkan.org/samples/latest/samples/performance/hpp_swapchain_images/README.html
-    for (present_modes) |mode| {
-        if (mode.efifo)
-            break;
-    } else {
-        return error.FeatureNotPresent;
-    }
 
     if (format_count > 0 and present_mode_count > 0)
         return format_count + present_mode_count;
     return error.FeatureNotPresent;
 }
 
-fn checkDeviceQueueSupport(pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !i32 {
+fn checkDeviceQueueSupport(pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator: Allocator) !u64 {
     const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
     defer allocator.free(families);
 
@@ -189,7 +184,7 @@ fn allocDeviceQueues(pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR, allocator:
     }
 
     if (graphics_family != null and present_family != null) {
-        queue_families = .{ .graphics_queue = graphics_family, .present_family = present_family };
+        queue_families = .{ .graphics_queue = graphics_family.?, .present_queue = present_family.? };
     }
 
     // sanity check
