@@ -90,11 +90,8 @@ pub fn init(
     self.physical_device = try self.pickPhysicalDevice(allocator);
 
     const dev = try self.createDevice();
-
-    const vkd = try allocator.create(DeviceDispatch);
-    errdefer allocator.destroy(vkd);
-    vkd.* = try DeviceDispatch.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
-    self.device = Device.init(dev, vkd.*);
+    const vkd = try DeviceDispatch.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
+    self.device = Device.init(dev, vkd);
     errdefer self.device.destroyDevice(null);
 
     return self;
