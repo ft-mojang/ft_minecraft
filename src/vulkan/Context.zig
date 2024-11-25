@@ -42,6 +42,7 @@ instance: Instance = undefined,
 physical_device: vk.PhysicalDevice = undefined,
 queue_families: QueueFamilies = undefined,
 surface: vk.SurfaceKHR = undefined,
+device: vk.Device = undefined,
 
 pub fn init(
     allocator: Allocator,
@@ -84,10 +85,13 @@ pub fn init(
 
     self.physical_device = try self.pickPhysicalDevice(allocator);
 
+    self.device = try self.createDevice();
+    errdefer self.device.destroyDevice(null);
     return self;
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
+    self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
 }
@@ -201,4 +205,28 @@ fn allocDeviceQueues(
 
     if (graphics_family != null and present_family != null)
         self.queue_families = QueueFamilies{ .graphics_queue = graphics_family.?, .present_queue = present_family.? };
+}
+
+fn createDevice(self: *Self) !vk.Device {
+    return self.instance.createDevice(
+        self.physical_device,
+        &.{
+            .queue_create_info_count = if (self.queue_families.graphics_queue == self.queue_families.present_queue) 1 else 2,
+            .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
+                .{
+                    .queue_family_index = self.queue_families.graphics_queue,
+                    .queue_count = 1,
+                    .p_queue_priorities = &.{1},
+                },
+                .{
+                    .queue_family_index = self.queue_families.present_queue,
+                    .queue_count = 1,
+                    .p_queue_priorities = &.{1},
+                },
+            },
+            .enabled_extension_count = instance_extensions.len,
+            .pp_enabled_extension_names = @ptrCast(&instance_extensions),
+        },
+        null,
+    );
 }
