@@ -97,7 +97,7 @@ pub fn init(
     return self;
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: Self) void {
     // self.device.destroyDevice(null);
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
