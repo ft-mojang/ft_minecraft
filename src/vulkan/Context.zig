@@ -122,7 +122,7 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
 }
 
 fn checkExtensionSupport(
-    self: Self,
+    self: *Self,
     allocator: Allocator,
     pdev: vk.PhysicalDevice,
 ) !u64 {
@@ -153,7 +153,7 @@ fn checkSurfaceSupport(self: Self, pdev: vk.PhysicalDevice) !u32 {
 }
 
 fn checkDeviceQueueSupport(
-    self: Self,
+    self: *Self,
     allocator: Allocator,
     pdev: vk.PhysicalDevice,
 ) !u64 {
