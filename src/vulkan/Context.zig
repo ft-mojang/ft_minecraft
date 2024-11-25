@@ -84,7 +84,7 @@ pub fn init(
     errdefer self.instance.destroyInstance(null);
 
     if (glfw.createWindowSurface(instance_handle, window, null, &self.surface) != 0)
-        error.SurfaceLostKHR;
+        return error.SurfaceLostKHR;
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
     self.physical_device = try self.pickPhysicalDevice(allocator);
