@@ -35,6 +35,10 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
+const device_extensions = [_][*:0]const u8{
+    vk.extensions.khr_swapchain.name,
+};
+
 const QueueFamilies = struct { graphics_queue: u32 = 0, present_queue: u32 = 0 };
 
 vkb: BaseDispatch = undefined,
@@ -42,7 +46,7 @@ instance: Instance = undefined,
 physical_device: vk.PhysicalDevice = undefined,
 queue_families: QueueFamilies = undefined,
 surface: vk.SurfaceKHR = undefined,
-device: vk.Device = undefined,
+device: Device = undefined,
 
 pub fn init(
     allocator: Allocator,
@@ -85,12 +89,19 @@ pub fn init(
 
     self.physical_device = try self.pickPhysicalDevice(allocator);
 
-    self.device = try self.createDevice();
+    const dev = try self.createDevice();
+
+    const vkd = try allocator.create(DeviceDispatch);
+    errdefer allocator.destroy(vkd);
+    vkd.* = try DeviceDispatch.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
+    self.device = Device.init(dev, vkd.*);
     errdefer self.device.destroyDevice(null);
+
     return self;
 }
 
 pub fn deinit(self: *Self) void {
+    // self.device.destroyDevice(null);
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
@@ -132,7 +143,7 @@ fn checkExtensionSupport(
 
     for (instance_extensions) |extension| {
         for (device_properties) |property| {
-            if (std.mem.eql(u8, property.extension_name, extension))
+            if (std.mem.eql(u8, std.mem.sliceTo(&property.extension_name, 0), std.mem.span(extension))) // according to https://github.com/Snektron/vulkan-zig/blob/dd6e61d68954a2eaa476044305dc227081a8d3fe/examples/graphics_context.zig#L286
                 break;
         } else {
             return error.ExtensionNotPresent;
@@ -208,7 +219,7 @@ fn allocDeviceQueues(
 }
 
 fn createDevice(self: *Self) !vk.Device {
-    return self.instance.createDevice(
+    return try self.instance.createDevice(
         self.physical_device,
         &.{
             .queue_create_info_count = if (self.queue_families.graphics_queue == self.queue_families.present_queue) 1 else 2,
@@ -224,56 +235,8 @@ fn createDevice(self: *Self) !vk.Device {
                     .p_queue_priorities = &.{1},
                 },
             },
-            .enabled_extension_count = instance_extensions.len,
-            .pp_enabled_extension_names = @ptrCast(&instance_extensions),
-        },
-        null,
-    );
-}
-
-fn createDevice(self: *Self) !vk.Device {
-    return self.instance.createDevice(
-        self.physical_device,
-        &.{
-            .queue_create_info_count = if (self.queue_families.graphics_queue == self.queue_families.present_queue) 1 else 2,
-            .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
-                .{
-                    .queue_family_index = self.queue_families.graphics_queue,
-                    .queue_count = 1,
-                    .p_queue_priorities = &.{1},
-                },
-                .{
-                    .queue_family_index = self.queue_families.present_queue,
-                    .queue_count = 1,
-                    .p_queue_priorities = &.{1},
-                },
-            },
-            .enabled_extension_count = instance_extensions.len,
-            .pp_enabled_extension_names = @ptrCast(&instance_extensions),
-        },
-        null,
-    );
-}
-
-fn createDevice(self: *Self) !vk.Device {
-    return self.instance.createDevice(
-        self.physical_device,
-        &.{
-            .queue_create_info_count = if (self.queue_families.graphics_queue == self.queue_families.present_queue) 1 else 2,
-            .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
-                .{
-                    .queue_family_index = self.queue_families.graphics_queue,
-                    .queue_count = 1,
-                    .p_queue_priorities = &.{1},
-                },
-                .{
-                    .queue_family_index = self.queue_families.present_queue,
-                    .queue_count = 1,
-                    .p_queue_priorities = &.{1},
-                },
-            },
-            .enabled_extension_count = instance_extensions.len,
-            .pp_enabled_extension_names = @ptrCast(&instance_extensions),
+            .enabled_extension_count = device_extensions.len,
+            .pp_enabled_extension_names = @ptrCast(&device_extensions),
         },
         null,
     );
