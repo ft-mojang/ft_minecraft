@@ -254,3 +254,27 @@ fn createDevice(self: *Self) !vk.Device {
         null,
     );
 }
+
+fn createDevice(self: *Self) !vk.Device {
+    return self.instance.createDevice(
+        self.physical_device,
+        &.{
+            .queue_create_info_count = if (self.queue_families.graphics_queue == self.queue_families.present_queue) 1 else 2,
+            .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
+                .{
+                    .queue_family_index = self.queue_families.graphics_queue,
+                    .queue_count = 1,
+                    .p_queue_priorities = &.{1},
+                },
+                .{
+                    .queue_family_index = self.queue_families.present_queue,
+                    .queue_count = 1,
+                    .p_queue_priorities = &.{1},
+                },
+            },
+            .enabled_extension_count = instance_extensions.len,
+            .pp_enabled_extension_names = @ptrCast(&instance_extensions),
+        },
+        null,
+    );
+}
