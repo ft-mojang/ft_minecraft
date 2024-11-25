@@ -39,7 +39,6 @@ const QueueFamilies = struct { graphics_queue: u32 = 0, present_queue: u32 = 0 }
 
 allocator: Allocator = undefined,
 vkb: BaseDispatch = undefined,
-vki: InstanceDispatch = undefined,
 instance: Instance = undefined,
 physical_device: vk.PhysicalDevice = undefined,
 queue_families: QueueFamilies = undefined,
@@ -79,8 +78,8 @@ pub fn init(
     };
 
     const instance_handle = try self.vkb.createInstance(&instance_create_info, null);
-    self.vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
-    self.instance = Instance.init(instance_handle, &self.vki);
+    const vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
+    self.instance = Instance.init(instance_handle, vki);
     errdefer self.instance.destroyInstance(null);
 
     if (glfw.createWindowSurface(instance_handle, window, null, &self.surface) != 0)
