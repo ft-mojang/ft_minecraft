@@ -37,7 +37,6 @@ const instance_extensions = [_][*:0]const u8{};
 
 const QueueFamilies = struct { graphics_queue: u32 = 0, present_queue: u32 = 0 };
 
-allocator: Allocator = undefined,
 vkb: BaseDispatch = undefined,
 instance: Instance = undefined,
 physical_device: vk.PhysicalDevice = undefined,
@@ -49,11 +48,8 @@ pub fn init(
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
     window: glfw.Window,
-) !*Self {
-    var self: *Self = try allocator.create(Self);
-    errdefer allocator.destroy(self);
-
-    self.allocator = allocator;
+) !Self {
+    var self: Self = undefined;
 
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
 
@@ -91,10 +87,9 @@ pub fn init(
     return self;
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: Self) void {
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
-    self.allocator.destroy(self);
 }
 
 fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
