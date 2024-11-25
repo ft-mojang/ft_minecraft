@@ -106,7 +106,7 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
 
     for (available_devices) |pdev| {
         const extension_score = self.checkExtensionSupport(allocator, pdev) catch continue;
-        const surface_score = self.checkSurfaceSupport(allocator, pdev) catch continue;
+        const surface_score = self.checkSurfaceSupport(pdev) catch continue;
         const queue_score = self.checkDeviceQueueSupport(allocator, pdev) catch continue;
         const score = extension_score + surface_score + queue_score;
         if (max_score < score) {
@@ -115,7 +115,7 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
         }
     }
     if (max_score != 0) {
-        _ = try self.allocDeviceQueues(allocator, max_device);
+        try self.allocDeviceQueues(allocator, max_device);
         return max_device;
     }
     return error.NoSuitableDevice;
@@ -140,12 +140,7 @@ fn checkExtensionSupport(
     return device_properties.len;
 }
 
-fn checkSurfaceSupport(
-    self: Self,
-    allocator: Allocator,
-    pdev: vk.PhysicalDevice,
-) !u32 {
-    _ = allocator;
+fn checkSurfaceSupport(self: Self, pdev: vk.PhysicalDevice) !u32 {
     var format_count: u32 = undefined;
     _ = try self.instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, self.surface, &format_count, null);
 
