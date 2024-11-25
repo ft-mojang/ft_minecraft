@@ -88,6 +88,7 @@ pub fn init(
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
     self.physical_device = try self.pickPhysicalDevice(allocator);
+
     return self;
 }
 
@@ -101,7 +102,6 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
     const available_devices = try self.instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(available_devices);
 
-    // score cant be less then 0 anyway
     var max_score: u64 = 0;
     var max_device: vk.PhysicalDevice = undefined;
 
@@ -115,15 +115,17 @@ fn pickPhysicalDevice(self: *Self, allocator: Allocator) !vk.PhysicalDevice {
             max_device = pdev;
         }
     }
+
     if (max_score != 0) {
         try self.allocDeviceQueues(allocator, max_device);
         return max_device;
     }
+
     return error.NoSuitableDevice;
 }
 
 fn checkExtensionSupport(
-    self: *Self,
+    self: *const Self,
     allocator: Allocator,
     pdev: vk.PhysicalDevice,
 ) !u64 {
@@ -138,10 +140,11 @@ fn checkExtensionSupport(
             return error.ExtensionNotPresent;
         }
     }
+
     return device_properties.len;
 }
 
-fn checkSurfaceSupport(self: *Self, pdev: vk.PhysicalDevice) !u32 {
+fn checkSurfaceSupport(self: *const Self, pdev: vk.PhysicalDevice) !u32 {
     var format_count: u32 = undefined;
     _ = try self.instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, self.surface, &format_count, null);
 
@@ -150,11 +153,12 @@ fn checkSurfaceSupport(self: *Self, pdev: vk.PhysicalDevice) !u32 {
 
     if (format_count > 0 and present_mode_count > 0)
         return format_count + present_mode_count;
+
     return error.FeatureNotPresent;
 }
 
 fn checkDeviceQueueSupport(
-    self: *Self,
+    self: *const Self,
     allocator: Allocator,
     pdev: vk.PhysicalDevice,
 ) !u64 {
@@ -167,18 +171,15 @@ fn checkDeviceQueueSupport(
     for (families, 0..) |properties, i| {
         const family: u32 = @intCast(i);
 
-        if (graphics_family == null and properties.queue_flags.graphics_bit) {
+        if (graphics_family == null and properties.queue_flags.graphics_bit)
             graphics_family = family;
-        }
 
-        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, self.surface)) == vk.TRUE) {
+        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, self.surface)) == vk.TRUE)
             present_family = family;
-        }
     }
 
-    if (graphics_family != null and present_family != null) {
+    if (graphics_family != null and present_family != null)
         return families.len;
-    }
 
     return error.FeatureNotPresent;
 }
@@ -197,16 +198,13 @@ fn allocDeviceQueues(
     for (families, 0..) |properties, i| {
         const family: u32 = @intCast(i);
 
-        if (graphics_family == null and properties.queue_flags.graphics_bit) {
+        if (graphics_family == null and properties.queue_flags.graphics_bit)
             graphics_family = family;
-        }
 
-        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, self.surface)) == vk.TRUE) {
+        if (present_family == null and (try self.instance.getPhysicalDeviceSurfaceSupportKHR(pdev, family, self.surface)) == vk.TRUE)
             present_family = family;
-        }
     }
 
-    if (graphics_family != null and present_family != null) {
+    if (graphics_family != null and present_family != null)
         self.queue_families = QueueFamilies{ .graphics_queue = graphics_family.?, .present_queue = present_family.? };
-    }
 }
