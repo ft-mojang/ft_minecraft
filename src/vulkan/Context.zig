@@ -49,8 +49,7 @@ pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
-    window: anytype,
-    createWindowSurface: fn (vk_instance: anytype, window: anytype, vk_allocation_callbacks: anytype, vk_surface_khr: anytype) i32,
+    window: glfw.Window,
 ) !*Self {
     var self: *Self = try allocator.create(Self);
     errdefer allocator.destroy(self);
@@ -83,7 +82,8 @@ pub fn init(
     self.vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
     self.instance = Instance.init(instance_handle, &self.vki);
     errdefer self.instance.destroyInstance(null);
-    _ = createWindowSurface(instance_handle, window, null, &self.surface);
+
+    _ = glfw.createWindowSurface(instance_handle, window, null, &self.surface);
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
     self.physical_device = try self.pickPhysicalDevice(allocator);
