@@ -45,6 +45,8 @@ vkb: BaseDispatch = undefined,
 instance: Instance = undefined,
 physical_device: vk.PhysicalDevice = undefined,
 queue_families: QueueFamilies = undefined,
+graphics_queue: Queue = undefined,
+present_queue: Queue = undefined,
 surface: vk.SurfaceKHR = undefined,
 device: Device = undefined,
 
@@ -93,6 +95,9 @@ pub fn init(
     const vkd = try DeviceDispatch.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
     self.device = Device.init(dev, vkd);
     errdefer self.device.destroyDevice(null);
+
+    self.graphics_queue = Queue.init(self.device, self.queue_families.graphics_queue);
+    self.present_queue = Queue.init(self.device, self.queue_families.present_queue);
 
     return self;
 }
