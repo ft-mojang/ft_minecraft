@@ -36,6 +36,7 @@ const validation_layers = [_][*:0]const u8{
 const instance_extensions = [_][*:0]const u8{};
 
 const device_extensions = [_][*:0]const u8{
+    vk.extensions.khr_portability_subset.name,
     vk.extensions.khr_swapchain.name,
 };
 
