@@ -24,7 +24,7 @@
     // internet connectivity.
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/alcjzk/vulkan-zig/archive/529c4a991511a4961563125fea644f01cb021d7c.zip",
+            .url = "https://github.com/ft-mojang/vulkan-zig/archive/529c4a991511a4961563125fea644f01cb021d7c.zip",
             .hash = "1220cc559fca714282ce8edb66c94f546db7b7a746e967c2a36f22d2c15f63541cbf",
         },
         .vulkan_headers = .{

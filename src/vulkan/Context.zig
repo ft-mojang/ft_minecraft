@@ -35,9 +35,18 @@ const validation_layers = [_][*:0]const u8{
 
 const instance_extensions = [_][*:0]const u8{};
 
-const device_extensions = [_][*:0]const u8{
-    vk.extensions.khr_portability_subset.name,
-    vk.extensions.khr_swapchain.name,
+const device_extensions = blk: {
+    const required_extensions = [_][*:0]const u8{
+        vk.extensions.khr_swapchain.name,
+    };
+
+    const macos_extensions = [_][*:0]const u8{
+        vk.extensions.khr_portability_subset.name,
+    };
+
+    if (builtin.os.tag == .macos)
+        break :blk required_extensions ++ macos_extensions;
+    break :blk required_extensions;
 };
 
 const QueueFamilies = struct { graphics_queue: u32 = 0, present_queue: u32 = 0 };
