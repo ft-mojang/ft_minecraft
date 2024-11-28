@@ -112,6 +112,20 @@ pub fn init(
         }
     } else self.surface_format = surface_formats[0]; // There must always be at least one supported surface format
 
+    const present_modes = try context.instance.getPhysicalDeviceSurfacePresentModesAllocKHR(
+        context.physical_device,
+        context.surface,
+        allocator,
+    );
+    defer allocator.free(present_modes);
+
+    for (preferred_present_mode) |pref| {
+        if (std.mem.indexOfScalar(vk.PresentModeKHR, present_modes, pref)) {
+            self.present_mode = pref;
+            break;
+        }
+    } else self.present_mode = .fifo_khr;
+
     var image_count = capabilities.min_image_count + 1;
     if (capabilities.max_image_count > 0) {
         image_count = @min(image_count, capabilities.max_image_count);
@@ -136,7 +150,7 @@ pub fn init(
         .p_queue_family_indices = &qfi,
         .pre_transform = capabilities.current_transform,
         .composite_alpha = .{ .opaque_bit_khr = true },
-        .present_mode = .fifo_khr,
+        .present_mode = self.present_mode,
         .clipped = vk.TRUE,
     }, null);
     errdefer context.device.destroySwapchainKHR(self.handle, null);
