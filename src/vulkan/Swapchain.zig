@@ -21,9 +21,62 @@ const preferred_surface_format = vk.SurfaceFormatKHR{
 const FrameInfo = struct {
     image: vk.Image,
     view: vk.ImageView,
-    swapchain_semaphore: vk.Semaphore,
-    render_semaphore: vk.Semaphore,
-    render_fence: vk.Fence,
+    image_acquired: vk.Semaphore,
+    render_finished: vk.Semaphore,
+    frame_fence: vk.Fence,
+
+    fn init(
+        self: *FrameInfo,
+        context: VulkanContext,
+        image: vk.Image,
+        format: vk.Format,
+    ) !FrameInfo {
+        self.view = try context.device.createImageView(&.{
+            .image = image,
+            .view_type = .@"2d",
+            .format = format,
+            .components = .{ .r = .identity, .g = .identity, .b = .identity, .a = .identity },
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        }, null);
+        errdefer context.device.destroyImageView(self.view, null);
+
+        self.image = image;
+
+        self.image_acquired = try context.device.createSemaphore(&.{}, null);
+        errdefer context.device.destroySemaphore(self.image_acquired, null);
+
+        self.render_finished = try context.device.createSemaphore(&.{}, null);
+        errdefer context.device.destroySemaphore(self.render_finished, null);
+
+        self.frame_fence = try context.device.createFence(
+            &.{
+                .flags = .{ .signaled_bit = true },
+            },
+            null,
+        );
+        errdefer context.device.destroyFence(self.frame_fence, null);
+
+        return self.*;
+    }
+
+    fn deinit(self: FrameInfo, context: VulkanContext) void {
+        _ = context.device.waitForFences(
+            1,
+            @ptrCast(&self.frame_fence),
+            vk.TRUE,
+            std.math.maxInt(u64),
+        ) catch return;
+        context.device.destroyImageView(self.view, null);
+        context.device.destroySemaphore(self.image_acquired, null);
+        context.device.destroySemaphore(self.render_finished, null);
+        context.device.destroyFence(self.frame_fence, null);
+    }
 };
 
 surface_format: vk.SurfaceFormatKHR,
@@ -59,9 +112,59 @@ pub fn init(
         }
     } else self.surface_format = surface_formats[0]; // There must always be at least one supported surface format
 
+    var image_count = capabilities.min_image_count + 1;
+    if (capabilities.max_image_count > 0) {
+        image_count = @min(image_count, capabilities.max_image_count);
+    }
+
+    const qfi = [_]u32{
+        context.queue_families.graphics_queue,
+        context.queue_families.present_queue,
+    };
+    const sharing_mode: vk.SharingMode = if (context.queue_families.graphics_queue != context.queue_families.present_queue) .concurrent else .exclusive;
+
+    self.handle = try context.device.createSwapchainKHR(&.{
+        .surface = context.surface,
+        .min_image_count = image_count,
+        .image_format = self.surface_format.format,
+        .image_color_space = self.surface_format.color_space,
+        .image_extent = capabilities.current_extent,
+        .image_array_layers = 1,
+        .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
+        .image_sharing_mode = sharing_mode,
+        .queue_family_index_count = qfi.len,
+        .p_queue_family_indices = &qfi,
+        .pre_transform = capabilities.current_transform,
+        .composite_alpha = .{ .opaque_bit_khr = true },
+        .present_mode = .fifo_khr,
+        .clipped = vk.TRUE,
+    }, null);
+    errdefer context.device.destroySwapchainKHR(self.handle, null);
+
+    const images = try context.device.getSwapchainImagesAllocKHR(
+        self.handle,
+        allocator,
+    );
+
+    self.swap_images = try allocator.alloc(FrameInfo, images.len);
+    errdefer {
+        for (self.swap_images[0..images.len]) |si|
+            si.deinit(context);
+        allocator.free(self.swap_images);
+    }
+
+    for (0..image_count) |index| {
+        self.swap_images[index] = try self.swap_images[index].init(
+            context,
+            images[index],
+            self.surface_format.format,
+        );
+    }
     return self;
 }
 
-pub fn deinit(self: Self) void {
-    _ = self;
+pub fn deinit(self: Self, context: VulkanContext) void {
+    for (self.swap_images[0..self.swap_images.len]) |si|
+        si.deinit(context);
+    context.device.destroySwapchainKHR(self.handle, null);
 }
