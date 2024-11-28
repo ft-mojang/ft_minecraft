@@ -80,6 +80,7 @@ pub fn main() !void {
         }
 
         render(accumulated_update_time / fixed_time_step);
+        try vk_swpchain.presentNextFrame(vk_ctx, vk.CommandBuffer.null_handle);
 
         prev_time = curr_time;
     }
