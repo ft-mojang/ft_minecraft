@@ -57,7 +57,7 @@ pub fn main() !void {
     defer vk_ctx.deinit();
 
     var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
-    defer vk_swpchain.deinit();
+    defer vk_swpchain.deinit(vk_ctx);
 
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
