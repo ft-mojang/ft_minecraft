@@ -8,7 +8,7 @@ const VulkanContext = vulkan.Context;
 
 const Self = @This();
 
-const preferred_present_mode = []vk.PresentModeKHR{
+const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
     .mailbox_khr,
 };
@@ -120,7 +120,7 @@ pub fn init(
     defer allocator.free(present_modes);
 
     for (preferred_present_mode) |pref| {
-        if (std.mem.indexOfScalar(vk.PresentModeKHR, present_modes, pref)) {
+        if (std.mem.indexOfScalar(vk.PresentModeKHR, present_modes, pref) != null) {
             self.present_mode = pref;
             break;
         }
@@ -174,6 +174,7 @@ pub fn init(
             self.surface_format.format,
         );
     }
+    self.image_index = 0;
     return self;
 }
 
@@ -181,4 +182,46 @@ pub fn deinit(self: Self, context: VulkanContext) void {
     for (self.swap_images[0..self.swap_images.len]) |si|
         si.deinit(context);
     context.device.destroySwapchainKHR(self.handle, null);
+}
+
+pub fn presentNextFrame(self: *Self, context: VulkanContext, cmdbuf: vk.CommandBuffer) !void {
+    const current = self.swap_images[self.image_index];
+    _ = context.device.waitForFences(
+        1,
+        @ptrCast(&current.frame_fence),
+        vk.TRUE,
+        std.math.maxInt(u64),
+    ) catch return;
+    try context.device.resetFences(1, @ptrCast(&current.frame_fence));
+
+    const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
+    try context.device.queueSubmit(context.graphics_queue, 1, &[_]vk.SubmitInfo{.{
+        .wait_semaphore_count = 1,
+        .p_wait_semaphores = @ptrCast(&current.image_acquired),
+        .p_wait_dst_stage_mask = &wait_stage,
+        .command_buffer_count = 1,
+        .p_command_buffers = @ptrCast(&cmdbuf),
+        .signal_semaphore_count = 1,
+        .p_signal_semaphores = @ptrCast(&current.render_finished),
+    }}, current.frame_fence);
+
+    // present current context
+    _ = try context.device.queuePresentKHR(context.present_queue, &.{
+        .wait_semaphore_count = 1,
+        .p_wait_semaphores = @ptrCast(&current.render_finished),
+        .swapchain_count = 1,
+        .p_swapchains = @ptrCast(&self.handle),
+        .p_image_indices = @ptrCast(&self.image_index),
+    });
+
+    // set next presentation context
+    const result = try context.device.acquireNextImageKHR(
+        self.handle,
+        std.math.maxInt(u64),
+        self.next_image_acquired,
+        .null_handle,
+    );
+
+    std.mem.swap(vk.Semaphore, &self.swap_images[result.image_index].image_acquired, &self.next_image_acquired);
+    self.image_index = result.image_index;
 }
