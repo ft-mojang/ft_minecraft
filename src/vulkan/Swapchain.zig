@@ -34,16 +34,16 @@ swap_images: []FrameInfo,
 image_index: u32,
 next_image_acquired: vk.Semaphore,
 
-fn init(
+pub fn init(
     allocator: Allocator,
-    context: *const VulkanContext,
+    context: VulkanContext,
 ) !Self {
     var self: Self = undefined;
-    const capabilities = context.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
+    const capabilities = try context.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
         context.physical_device,
         context.surface,
     );
-    if (capabilities.extent.window_width == 0 or capabilities.extent.window_height == 0)
+    if (capabilities.current_extent.width == 0 or capabilities.current_extent.height == 0)
         return error.SurfaceLostKHR;
     const surface_formats = try context.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(
         context.physical_device,
@@ -52,9 +52,16 @@ fn init(
     );
     defer allocator.free(surface_formats);
 
-    self.surface_format = for (surface_formats) |sfmt| {
+    for (surface_formats) |sfmt| {
         if (std.meta.eql(sfmt, preferred_surface_format)) {
-            preferred_surface_format;
+            self.surface_format = preferred_surface_format;
+            break;
         }
-    } else surface_formats[0]; // There must always be at least one supported surface format
+    } else self.surface_format = surface_formats[0]; // There must always be at least one supported surface format
+
+    return self;
+}
+
+pub fn deinit(self: Self) void {
+    _ = self;
 }
