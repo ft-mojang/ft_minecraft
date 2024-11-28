@@ -55,8 +55,8 @@ vkb: BaseDispatch = undefined,
 instance: Instance = undefined,
 physical_device: vk.PhysicalDevice = undefined,
 queue_families: QueueFamilies = undefined,
-graphics_queue: Queue = undefined,
-present_queue: Queue = undefined,
+graphics_queue: vk.Queue = undefined,
+present_queue: vk.Queue = undefined,
 surface: vk.SurfaceKHR = undefined,
 device: Device = undefined,
 
@@ -106,8 +106,8 @@ pub fn init(
     self.device = Device.init(dev, vkd);
     errdefer self.device.destroyDevice(null);
 
-    self.graphics_queue = Queue.init(self.device, self.queue_families.graphics_queue);
-    self.present_queue = Queue.init(self.device, self.queue_families.present_queue);
+    self.graphics_queue = self.device.getDeviceQueue(self.queue_families.graphics_queue, 0);
+    self.present_queue = self.device.getDeviceQueue(self.queue_families.present_queue, 0);
 
     return self;
 }

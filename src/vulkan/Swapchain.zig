@@ -56,5 +56,5 @@ fn init(
         if (std.meta.eql(sfmt, preferred_surface_format)) {
             preferred_surface_format;
         }
-    } else return surface_formats[0]; // There must always be at least one supported surface format
+    } else surface_formats[0]; // There must always be at least one supported surface format
 }
