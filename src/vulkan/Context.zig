@@ -68,9 +68,7 @@ pub fn init(
     window: glfw.Window,
 ) !Self {
     var self: Self = undefined;
-
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
-
     if (try self.vkb.enumerateInstanceVersion() < app_info.api_version) {
         return error.InsufficientInstanceVersion;
     }
@@ -83,10 +81,7 @@ pub fn init(
     }
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
-    try self.pickPhysicalDevice(allocator);
-    try self.pickQueueFamily(allocator);
-
-    try self.initDevice();
+    try self.initDevice(allocator);
     errdefer self.device.destroyDevice(null);
 
     const queue_handle = self.device.getDeviceQueue(self.queue_family_index, 0);
@@ -182,7 +177,13 @@ fn pickQueueFamily(
     }
 }
 
-fn initDevice(self: *Self) !void {
+fn initDevice(
+    self: *Self,
+    allocator: Allocator,
+) !void {
+    try self.pickPhysicalDevice(allocator);
+    try self.pickQueueFamily(allocator);
+
     const device_create_info: vk.DeviceCreateInfo = .{
         .queue_create_info_count = 1,
         .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
