@@ -31,7 +31,7 @@ const app_info: vk.ApplicationInfo = .{
 
 const validation_layers = if (builtin.mode == .Debug) [_][*:0]const u8{
     "VK_LAYER_KHRONOS_validation",
-} else {};
+} else [_][*:0]const u8{};
 
 const instance_extensions = [_][*:0]const u8{
     vk.extensions.khr_surface.name,
@@ -39,7 +39,7 @@ const instance_extensions = [_][*:0]const u8{
     .macos => [_][*:0]const u8{
         vk.extensions.khr_portability_enumeration.name,
     },
-    else => {},
+    else => [_][*:0]const u8{},
 };
 
 const device_extensions = [_][*:0]const u8{
@@ -48,7 +48,7 @@ const device_extensions = [_][*:0]const u8{
     .macos => [_][*:0]const u8{
         vk.extensions.khr_portability_subset.name,
     },
-    else => {},
+    else => [_][*:0]const u8{},
 };
 
 vkb: BaseDispatch,
