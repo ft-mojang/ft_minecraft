@@ -169,8 +169,14 @@ fn pickQueueFamily(
         if (!properties.queue_flags.graphics_bit) {
             continue;
         }
+
+        const index: u32 = @intCast(i);
+        if (try self.instance.getPhysicalDeviceSurfaceSupportKHR(self.physical_device, index, self.surface) == vk.FALSE) {
+            continue;
+        }
+
         self.queue_family_properties = properties;
-        self.queue_family_index = @intCast(i);
+        self.queue_family_index = index;
         break;
     } else {
         return error.NoSuitableQueueFamily;
