@@ -4,6 +4,7 @@ const std = @import("std");
 // declaratively construct a build graph that will be executed by an external
 // runner.
 pub fn build(b: *std.Build) void {
+    const exe_name = "ft_minecraft";
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -16,7 +17,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "ft_minecraft",
+        .name = exe_name,
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const check = b.addExecutable(.{
+        .name = exe_name,
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
@@ -33,6 +41,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.addImport("mach-glfw", dep_mach_glfw.module("mach-glfw"));
+    check.root_module.addImport("mach-glfw", dep_mach_glfw.module("mach-glfw"));
 
     // Get the (lazy) path to vk.xml:
     const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
@@ -43,9 +52,12 @@ pub fn build(b: *std.Build) void {
     // Pass the registry to the generator
     vk_generate_cmd.addFileArg(registry);
     // Add the generator's output as a module
-    exe.root_module.addAnonymousImport("vulkan", .{
+    const vk_module = b.createModule(.{
         .root_source_file = vk_generate_cmd.addOutputFileArg("vk.zig"),
     });
+
+    exe.root_module.addImport("vulkan", vk_module);
+    check.root_module.addImport("vulkan", vk_module);
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
@@ -63,6 +75,9 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
+
+    const check_step = b.step("check", "Check build");
+    check_step.dependOn(&check.step);
 
     // This creates a build step. It will be visible in the `zig build --help` menu,
     // and can be selected like this: `zig build run`
