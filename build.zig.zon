@@ -33,7 +33,7 @@
         },
         .mach_glfw = .{
             .url = "https://github.com/ft-mojang/mach-glfw/archive/refs/heads/main.zip",
-            .hash = "12207686ea3b0e8692faa476151438e60a6f12a248971697a993fc47492fff4b181b",
+            .hash = "1220365c8eaaa7571d85d1f513ba02c68ae1c61c607ae009b6ec4f0a248734de2bc1",
         },
     },
 
