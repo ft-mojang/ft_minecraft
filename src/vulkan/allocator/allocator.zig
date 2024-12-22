@@ -43,11 +43,6 @@ const AllocationKind = enum(u1) {
     pooled,
 };
 
-pub const AllocatorCreateInfo = struct {
-    allocator: mem.Allocator,
-    context: *const vulkan.Context,
-};
-
 /// Vulkan allocator.
 pub const Allocator = struct {
     allocator: mem.Allocator,
@@ -57,7 +52,12 @@ pub const Allocator = struct {
 
     const Self = @This();
 
-    pub fn init(create_info: AllocatorCreateInfo) Self {
+    pub const CreateInfo = struct {
+        allocator: mem.Allocator,
+        context: *const vulkan.Context,
+    };
+
+    pub fn init(create_info: CreateInfo) Self {
         return Self{
             .allocator = create_info.allocator,
             .context = create_info.context,
