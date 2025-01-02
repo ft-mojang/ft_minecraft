@@ -52,16 +52,11 @@ pub const Allocator = struct {
 
     const Self = @This();
 
-    pub const CreateInfo = struct {
-        allocator: mem.Allocator,
-        context: *const vulkan.Context,
-    };
-
-    pub fn init(create_info: CreateInfo) Self {
+    pub fn init(allocator: mem.Allocator, context: *const vulkan.Context) Self {
         return Self{
-            .allocator = create_info.allocator,
-            .context = create_info.context,
-            .dedicated = DedicatedAllocator.init(create_info.allocator, create_info.context),
+            .allocator = allocator,
+            .context = context,
+            .dedicated = DedicatedAllocator.init(allocator, context),
         };
     }
 

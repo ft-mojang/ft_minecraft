@@ -56,10 +56,7 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var vk_allocator = VulkanAllocator.init(.{
-        .context = &vk_ctx,
-        .allocator = std.heap.page_allocator,
-    });
+    var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
     defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
