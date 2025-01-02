@@ -96,6 +96,24 @@ pub fn deinit(self: Self) void {
     self.instance.destroyInstance(null);
 }
 
+pub fn findMemoryType(self: Self, type_filter: u32, flags: vk.MemoryPropertyFlags) !u32 {
+    const properties = self.instance.getPhysicalDeviceMemoryProperties(self.physical_device);
+
+    for (0..properties.memory_type_count) |memory_type| {
+        if (type_filter & (@as(u32, 1) << @intCast(memory_type)) == 0) {
+            continue;
+        }
+
+        const property_flags = properties.memory_types[memory_type].property_flags;
+
+        if (flags.intersect(property_flags) == flags) {
+            return @intCast(memory_type);
+        }
+    }
+
+    return error.MemoryTypeNotFound;
+}
+
 fn initInstance(
     self: *Self,
     allocator: Allocator,

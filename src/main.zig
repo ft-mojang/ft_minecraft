@@ -5,6 +5,7 @@ const glfw = @import("mach-glfw");
 
 const vulkan = @import("vulkan/vulkan.zig");
 const VulkanContext = vulkan.Context;
+const VulkanAllocator = vulkan.Allocator;
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -54,6 +55,9 @@ pub fn main() !void {
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
     var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
+
+    var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
+    defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
