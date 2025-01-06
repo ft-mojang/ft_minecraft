@@ -196,17 +196,18 @@ pub fn presentNextFrame(self: *Self, context: VulkanContext, cmdbuf: vk.CommandB
     ) catch return;
     try context.device.resetFences(1, @ptrCast(&current.frame_fence));
 
-    const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
+    // const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
     // TODO this has to go to the render function
-    try context.device.queueSubmit(context.graphics_queue, 1, &[_]vk.SubmitInfo{.{
-        .wait_semaphore_count = 1,
-        .p_wait_semaphores = @ptrCast(&current.image_acquired),
-        .p_wait_dst_stage_mask = &wait_stage,
-        .command_buffer_count = 1,
-        .p_command_buffers = @ptrCast(&cmdbuf),
-        .signal_semaphore_count = 1,
-        .p_signal_semaphores = @ptrCast(&current.render_finished),
-    }}, current.frame_fence);
+    // try context.device.queueSubmit(context.graphics_queue, 1, &[_]vk.SubmitInfo{.{
+    //     .wait_semaphore_count = 1,
+    //     .p_wait_semaphores = @ptrCast(&current.image_acquired),
+    //     .p_wait_dst_stage_mask = &wait_stage,
+    //     .command_buffer_count = 1,
+    //     .p_command_buffers = @ptrCast(&cmdbuf),
+    //     .signal_semaphore_count = 1,
+    //     .p_signal_semaphores = @ptrCast(&current.render_finished),
+    // }}, current.frame_fence);
+    _ = cmdbuf;
 
     // present current context
     _ = try context.device.queuePresentKHR(context.present_queue, &.{
