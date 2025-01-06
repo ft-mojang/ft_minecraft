@@ -8,9 +8,12 @@ const VulkanContext = vulkan.Context;
 const Swapchain = vulkan.Swapchain;
 const Self = @This();
 
+const vert_spv align(@alignOf(u32)) = @embedFile("../vert.spv").*;
+const frag_spv align(@alignOf(u32)) = @embedFile("../frag.spv").*;
+
 pipeline: vk.Pipeline,
 commandpool: vk.CommandPool,
-commandbuffers: vk.CommandBuffer[3], // one command buffer per frame (max 3 for triple buffered)
+commandbuffers: [3]vk.CommandBuffer, // one command buffer per frame (max 3 for triple buffered)
 
 pub fn init(
     allocator: Allocator,
@@ -18,7 +21,6 @@ pub fn init(
     swapchain: Swapchain,
 ) !Self {
     const self: Self = undefined;
-    // TODO load shader modules
     const pipelineinfo: vk.PipelineRenderingCreateInfoKHR = .{
         .p_next = &.null_handle,
         .color_attachment_count = 1,
@@ -30,20 +32,42 @@ pub fn init(
         .stencil_attachment_format = .r8g8b8a8_unorm,
         .view_mask = 0,
     };
+    const vert = try context.device.createShaderModule(
+        &.{
+            .code_size = vert_spv.len,
+            .p_code = @ptrCast(vert_spv),
+        },
+        null,
+    );
+    defer context.device.destroyShaderModule(vert, null);
+    const frag = try context.device.createShaderModule(
+        &.{
+            .code_size = frag_spv.len,
+            .p_code = @ptrCast(frag_spv),
+        },
+        null,
+    );
+    defer context.device.destroyShaderModule(frag, null);
     context.device.createGraphicsPipelines(
         .null_handle,
         1,
         &vk.GraphicsPipelineCreateInfo{
-            .flags = {},
+            .flags = .{},
             .p_stages = &[_]vk.PipelineShaderStageCreateInfo{
                 .{
                     .stage = .{ .vertex_bit = true },
-                    .module = null,
+                    .module = vert,
+                    .p_name = "main",
+                },
+                .{
+                    .stage = .{ .fragment_bit = true },
+                    .module = frag,
                     .p_name = "main",
                 },
             },
             .p_next = &pipelineinfo,
             .render_pass = .null_handle,
+            .subpass = 0,
         },
         allocator,
         self.pipeline,

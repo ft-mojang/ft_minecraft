@@ -185,6 +185,7 @@ pub fn deinit(self: Self, context: VulkanContext) void {
     context.device.destroySwapchainKHR(self.handle, null);
 }
 
+// double buffered, could be made to sync 3 frames
 pub fn presentNextFrame(self: *Self, context: VulkanContext, cmdbuf: vk.CommandBuffer) !void {
     const current = self.swap_images[self.image_index];
     _ = context.device.waitForFences(
