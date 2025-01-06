@@ -132,12 +132,6 @@ pub fn init(
         image_count = @min(image_count, capabilities.max_image_count);
     }
 
-    const qfi = [_]u32{
-        context.queue_families.graphics_queue,
-        context.queue_families.present_queue,
-    };
-    const sharing_mode: vk.SharingMode = if (context.queue_families.graphics_queue != context.queue_families.present_queue) .concurrent else .exclusive;
-
     self.handle = try context.device.createSwapchainKHR(&.{
         .surface = context.surface,
         .min_image_count = image_count,
@@ -146,9 +140,9 @@ pub fn init(
         .image_extent = capabilities.current_extent,
         .image_array_layers = 1,
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
-        .image_sharing_mode = sharing_mode,
-        .queue_family_index_count = qfi.len,
-        .p_queue_family_indices = &qfi,
+        .image_sharing_mode = .concurrent,
+        .queue_family_index_count = 1,
+        .p_queue_family_indices = &.{context.queue_family_index},
         .pre_transform = capabilities.current_transform,
         .composite_alpha = .{ .opaque_bit_khr = true },
         .present_mode = self.present_mode,
@@ -210,7 +204,7 @@ pub fn presentNextFrame(self: *Self, context: VulkanContext, cmdbuf: vk.CommandB
     _ = cmdbuf;
 
     // present current context
-    _ = try context.device.queuePresentKHR(context.present_queue, &.{
+    _ = try context.device.queuePresentKHR(context.queue.handle, &.{
         .wait_semaphore_count = 1,
         .p_wait_semaphores = @ptrCast(&current.render_finished),
         .swapchain_count = 1,
