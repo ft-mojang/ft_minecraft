@@ -34,7 +34,7 @@ jobs:
 
       - name: Fetch & unpack zig
         run: |
-          curl -o zig.tar.xz https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.2254+73f2671c7.tar.xz
+          curl -s  https://ziglang.org/download/index.json | jq '.master."x86_64-linux".tarball' | xargs curl -o zig.tar.xz
           mkdir -p gh-zig && tar xf zig.tar.xz -C gh-zig --strip-components 1
 
       - name: Validate formatting

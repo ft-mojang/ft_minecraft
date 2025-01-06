@@ -6,7 +6,8 @@ const glfw = @import("mach-glfw");
 const vulkan = @import("vulkan/vulkan.zig");
 const VulkanContext = vulkan.Context;
 const Swapchain = vulkan.Swapchain;
-const Pipeline = vulkan.Pipeline;
+
+const VulkanAllocator = vulkan.Allocator;
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -59,6 +60,9 @@ pub fn main() !void {
 
     var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
     defer vk_swpchain.deinit(vk_ctx);
+    
+    var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
+    defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
