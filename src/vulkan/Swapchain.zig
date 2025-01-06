@@ -18,6 +18,7 @@ const preferred_surface_format = vk.SurfaceFormatKHR{
     .color_space = .srgb_nonlinear_khr,
 };
 
+// TODO when dynamic rendering has to hold attachmentinfos
 const FrameInfo = struct {
     image: vk.Image,
     view: vk.ImageView,
@@ -195,6 +196,7 @@ pub fn presentNextFrame(self: *Self, context: VulkanContext, cmdbuf: vk.CommandB
     try context.device.resetFences(1, @ptrCast(&current.frame_fence));
 
     const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
+    // TODO this has to go to the render function
     try context.device.queueSubmit(context.graphics_queue, 1, &[_]vk.SubmitInfo{.{
         .wait_semaphore_count = 1,
         .p_wait_semaphores = @ptrCast(&current.image_acquired),

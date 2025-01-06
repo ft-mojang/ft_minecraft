@@ -6,6 +6,7 @@ const glfw = @import("mach-glfw");
 const vulkan = @import("vulkan/vulkan.zig");
 const VulkanContext = vulkan.Context;
 const Swapchain = vulkan.Swapchain;
+const Pipeline = vulkan.Pipeline;
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -59,6 +60,8 @@ pub fn main() !void {
     var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
     defer vk_swpchain.deinit(vk_ctx);
 
+    const vk_pipeline = try Pipeline.init(std.heap.page_allocator, vk_ctx, vk_swpchain);
+
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
     var simulation_time: f64 = 0.0;
@@ -80,8 +83,8 @@ pub fn main() !void {
         }
 
         render(accumulated_update_time / fixed_time_step);
-        try vk_swpchain.presentNextFrame(vk_ctx, vk.CommandBuffer.null_handle);
-
+        //try vk_swpchain.presentNextFrame(vk_ctx, vk.CommandBuffer.null_handle); TODO fix this line with error
+        _ = vk_pipeline;
         prev_time = curr_time;
     }
 }
