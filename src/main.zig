@@ -60,7 +60,7 @@ pub fn main() !void {
 
     var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
     defer vk_swpchain.deinit(vk_ctx);
-    
+
     var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
     defer vk_allocator.deinit();
 
