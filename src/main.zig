@@ -5,6 +5,8 @@ const glfw = @import("mach-glfw");
 
 const vulkan = @import("vulkan/vulkan.zig");
 const VulkanContext = vulkan.Context;
+const Swapchain = vulkan.Swapchain;
+
 const VulkanAllocator = vulkan.Allocator;
 
 const window_title = "ft_minecraft";
@@ -56,6 +58,9 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
+    var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
+    defer vk_swpchain.deinit(vk_ctx);
+
     var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
     defer vk_allocator.deinit();
 
@@ -80,7 +85,7 @@ pub fn main() !void {
         }
 
         render(accumulated_update_time / fixed_time_step);
-
+        try vk_swpchain.presentNextFrame(vk_ctx, vk.CommandBuffer.null_handle);
         prev_time = curr_time;
     }
 }
