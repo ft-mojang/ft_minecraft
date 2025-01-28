@@ -25,6 +25,10 @@ fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
 }
 
 pub fn main() !void {
+    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer _ = general_purpose_allocator.deinit();
+    const gpa = general_purpose_allocator.allocator();
+
     glfw.setErrorCallback(logGLFWError);
 
     if (!glfw.init(.{})) {
@@ -53,10 +57,10 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions, window);
+    var vk_ctx = try VulkanContext.init(gpa, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
+    var vk_allocator = VulkanAllocator.init(gpa, &vk_ctx);
     defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
