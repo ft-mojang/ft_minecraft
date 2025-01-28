@@ -32,8 +32,8 @@
             .hash = "1220d8deff13f2e31607eb0771cb316abc7753f79424aef3edb653a101ec942ce981",
         },
         .mach_glfw = .{
-            .url = "https://github.com/ft-mojang/mach-glfw/archive/refs/heads/main.zip",
-            .hash = "1220365c8eaaa7571d85d1f513ba02c68ae1c61c607ae009b6ec4f0a248734de2bc1",
+            .url = "https://github.com/emidoots/mach-glfw/archive/affdd6ae6f2ac2c3b9162784bdad345c561eeeea.zip",
+            .hash = "122022ea6df16700e521078c20d7d01f894c6f967e6c6ce1ea166426b4fc61667de3",
         },
     },
 
