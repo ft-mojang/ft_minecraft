@@ -53,6 +53,8 @@ const device_extensions = [_][*:0]const u8{
 
 allocator: Allocator,
 vkb: BaseDispatch,
+vki: InstanceDispatch,
+vkd: DeviceDispatch,
 instance: Instance,
 surface: vk.SurfaceKHR,
 physical_device: vk.PhysicalDevice,
@@ -67,8 +69,9 @@ pub fn init(
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
     window: glfw.Window,
-) !Self {
-    var self: Self = undefined;
+) !*Self {
+    var self = try allocator.create(Self);
+    errdefer allocator.destroy(self);
 
     self.allocator = allocator;
 
@@ -77,18 +80,19 @@ pub fn init(
         return error.InsufficientInstanceVersion;
     }
 
-    try self.initInstance(allocator, platform_instance_extensions);
+    self.instance = try initInstance(allocator, self.vkb, &self.vki, platform_instance_extensions);
     errdefer self.instance.destroyInstance(null);
-    errdefer allocator.destroy(self.instance.wrapper);
 
     if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
         return error.SurfaceCreationFailed;
     }
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
-    try self.initDevice(allocator);
+    self.physical_device = try pickPhysicalDevice(allocator, self.instance, &self.physical_device_properties);
+    self.queue_family_index = try pickQueueFamily(allocator, self.instance, self.physical_device, self.surface, &self.queue_family_properties);
+
+    self.device = try initDevice(self.instance, self.physical_device, self.queue_family_index, &self.vkd);
     errdefer self.device.destroyDevice(null);
-    errdefer allocator.destroy(self.device.wrapper);
 
     const queue_handle = self.device.getDeviceQueue(self.queue_family_index, 0);
     self.queue = Queue.init(queue_handle, self.device.wrapper);
@@ -96,16 +100,18 @@ pub fn init(
     return self;
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
-
-    self.allocator.destroy(self.device.wrapper);
-    self.allocator.destroy(self.instance.wrapper);
+    self.allocator.destroy(self);
 }
 
-pub fn findMemoryType(self: Self, type_filter: u32, flags: vk.MemoryPropertyFlags) !u32 {
+pub fn findMemoryType(
+    self: *const Self,
+    type_filter: u32,
+    flags: vk.MemoryPropertyFlags,
+) !u32 {
     const properties = self.instance.getPhysicalDeviceMemoryProperties(self.physical_device);
 
     for (0..properties.memory_type_count) |memory_type| {
@@ -124,10 +130,11 @@ pub fn findMemoryType(self: Self, type_filter: u32, flags: vk.MemoryPropertyFlag
 }
 
 fn initInstance(
-    self: *Self,
     allocator: Allocator,
+    vkb: BaseDispatch,
+    vki: *InstanceDispatch,
     platform_instance_extensions: [][*:0]const u8,
-) !void {
+) !Instance {
     var enabled_instance_extensions = try std.ArrayList([*:0]const u8)
         .initCapacity(allocator, instance_extensions.len + platform_instance_extensions.len);
     defer enabled_instance_extensions.deinit();
@@ -151,19 +158,18 @@ fn initInstance(
         .pp_enabled_extension_names = enabled_instance_extensions.items.ptr,
     };
 
-    const instance_handle = try self.vkb.createInstance(&instance_create_info, null);
-    const vki = try allocator.create(InstanceDispatch);
-    errdefer allocator.destroy(vki);
-    vki.* = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
-    self.instance = Instance.init(instance_handle, vki);
+    const instance_handle = try vkb.createInstance(&instance_create_info, null);
+    vki.* = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
+    return Instance.init(instance_handle, vki);
 }
 
 fn pickPhysicalDevice(
-    self: *Self,
     allocator: Allocator,
-) !void {
+    instance: Instance,
+    physical_device_properties: *vk.PhysicalDeviceProperties,
+) !vk.PhysicalDevice {
     var physical_device_count: u32 = undefined;
-    if (try self.instance.enumeratePhysicalDevices(&physical_device_count, null) != vk.Result.success) {
+    if (try instance.enumeratePhysicalDevices(&physical_device_count, null) != vk.Result.success) {
         return error.PhysicalDeviceEnumerationFailed;
     }
     if (physical_device_count == 0) {
@@ -171,59 +177,63 @@ fn pickPhysicalDevice(
     }
     const physical_devices = try allocator.alloc(vk.PhysicalDevice, physical_device_count);
     defer allocator.free(physical_devices);
-    if (try self.instance.enumeratePhysicalDevices(&physical_device_count, physical_devices.ptr) != vk.Result.success) {
+    if (try instance.enumeratePhysicalDevices(&physical_device_count, physical_devices.ptr) != vk.Result.success) {
         return error.PhysicalDeviceEnumerationFailed;
     }
 
-    self.physical_device = physical_devices[0];
-    self.physical_device_properties = self.instance.getPhysicalDeviceProperties(self.physical_device);
-    if (self.physical_device_properties.api_version < app_info.api_version) {
+    const phys_device = physical_devices[0];
+    const properties = instance.getPhysicalDeviceProperties(phys_device);
+    if (properties.api_version < app_info.api_version) {
         return error.InsufficientDeviceVersion;
     }
+
+    physical_device_properties.* = properties;
+    return phys_device;
 }
 
 fn pickQueueFamily(
-    self: *Self,
     allocator: Allocator,
-) !void {
+    instance: Instance,
+    physical_device: vk.PhysicalDevice,
+    surface: vk.SurfaceKHR,
+    queue_family_properties: *vk.QueueFamilyProperties,
+) !u32 {
     var queue_family_count: u32 = undefined;
-    self.instance.getPhysicalDeviceQueueFamilyProperties(self.physical_device, &queue_family_count, null);
+    instance.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, null);
     if (queue_family_count == 0) {
         return error.ZeroQueueFamiliesFound;
     }
-    const queue_family_properties = try allocator.alloc(vk.QueueFamilyProperties, queue_family_count);
-    defer allocator.free(queue_family_properties);
-    self.instance.getPhysicalDeviceQueueFamilyProperties(self.physical_device, &queue_family_count, queue_family_properties.ptr);
-    for (queue_family_properties, 0..) |properties, i| {
+    const device_queue_family_properties = try allocator.alloc(vk.QueueFamilyProperties, queue_family_count);
+    defer allocator.free(device_queue_family_properties);
+    instance.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, device_queue_family_properties.ptr);
+    for (device_queue_family_properties, 0..) |properties, i| {
         if (!properties.queue_flags.graphics_bit) {
             continue;
         }
         const index: u32 = @intCast(i);
-        if (try self.instance.getPhysicalDeviceSurfaceSupportKHR(self.physical_device, index, self.surface) == vk.FALSE) {
+        if (try instance.getPhysicalDeviceSurfaceSupportKHR(physical_device, index, surface) == vk.FALSE) {
             continue;
         }
-        self.queue_family_properties = properties;
-        self.queue_family_index = index;
-        break;
+        queue_family_properties.* = properties;
+        return index;
     } else {
         return error.NoSuitableQueueFamily;
     }
 }
 
 fn initDevice(
-    self: *Self,
-    allocator: Allocator,
-) !void {
-    try self.pickPhysicalDevice(allocator);
-    try self.pickQueueFamily(allocator);
-
+    instance: Instance,
+    physical_device: vk.PhysicalDevice,
+    queue_family_index: u32,
+    vkd: *DeviceDispatch,
+) !Device {
     const device_create_info: vk.DeviceCreateInfo = .{
         .queue_create_info_count = 1,
         .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
             .{
                 .p_queue_priorities = &.{1.0},
                 .queue_count = 1,
-                .queue_family_index = self.queue_family_index,
+                .queue_family_index = queue_family_index,
             },
         },
         .enabled_layer_count = validation_layers.len,
@@ -233,9 +243,7 @@ fn initDevice(
         .p_enabled_features = &.{},
     };
 
-    const device_handle = try self.instance.createDevice(self.physical_device, &device_create_info, null);
-    const vkd = try allocator.create(DeviceDispatch);
-    errdefer allocator.destroy(vkd);
-    vkd.* = try DeviceDispatch.load(device_handle, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
-    self.device = Device.init(device_handle, vkd);
+    const device_handle = try instance.createDevice(physical_device, &device_create_info, null);
+    vkd.* = try DeviceDispatch.load(device_handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
+    return Device.init(device_handle, vkd);
 }

@@ -60,7 +60,7 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(gpa, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var vk_allocator = VulkanAllocator.init(gpa, &vk_ctx);
+    var vk_allocator = VulkanAllocator.init(gpa, vk_ctx);
     defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
