@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/bb470f16dabd8195155ba9e3714dc62d7ad69add.zip",
-            .hash = "12205f4e25c7102242d99dfc4f022a9c667bf4c5058b3919364f89fd882b6845d721",
+            .url = "https://github.com/snektron/vulkan-zig/archive/1fd5a6e217dfcc7e4406d449924a1feb1ecffbb9.zip",
+            .hash = "122096b4021c4bb35d373d589a31237e2ac834969ea50401d73cc50780aaec8ea367",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.3.296.zip",
