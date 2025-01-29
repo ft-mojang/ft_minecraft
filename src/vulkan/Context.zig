@@ -51,6 +51,7 @@ const device_extensions = [_][*:0]const u8{
     else => [_][*:0]const u8{},
 };
 
+allocator: Allocator,
 vkb: BaseDispatch,
 instance: Instance,
 surface: vk.SurfaceKHR,
@@ -68,6 +69,9 @@ pub fn init(
     window: glfw.Window,
 ) !Self {
     var self: Self = undefined;
+
+    self.allocator = allocator;
+
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
     if (try self.vkb.enumerateInstanceVersion() < app_info.api_version) {
         return error.InsufficientInstanceVersion;
@@ -75,6 +79,7 @@ pub fn init(
 
     try self.initInstance(allocator, platform_instance_extensions);
     errdefer self.instance.destroyInstance(null);
+    errdefer allocator.destroy(self.instance.wrapper);
 
     if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
         return error.SurfaceCreationFailed;
@@ -83,6 +88,7 @@ pub fn init(
 
     try self.initDevice(allocator);
     errdefer self.device.destroyDevice(null);
+    errdefer allocator.destroy(self.device.wrapper);
 
     const queue_handle = self.device.getDeviceQueue(self.queue_family_index, 0);
     self.queue = Queue.init(queue_handle, self.device.wrapper);
@@ -94,6 +100,9 @@ pub fn deinit(self: Self) void {
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
+
+    self.allocator.destroy(self.device.wrapper);
+    self.allocator.destroy(self.instance.wrapper);
 }
 
 pub fn findMemoryType(self: Self, type_filter: u32, flags: vk.MemoryPropertyFlags) !u32 {
@@ -143,7 +152,9 @@ fn initInstance(
     };
 
     const instance_handle = try self.vkb.createInstance(&instance_create_info, null);
-    const vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
+    const vki = try allocator.create(InstanceDispatch);
+    errdefer allocator.destroy(vki);
+    vki.* = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
     self.instance = Instance.init(instance_handle, vki);
 }
 
@@ -223,6 +234,8 @@ fn initDevice(
     };
 
     const device_handle = try self.instance.createDevice(self.physical_device, &device_create_info, null);
-    const vkd = try DeviceDispatch.load(device_handle, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
+    const vkd = try allocator.create(DeviceDispatch);
+    errdefer allocator.destroy(vkd);
+    vkd.* = try DeviceDispatch.load(device_handle, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
     self.device = Device.init(device_handle, vkd);
 }
