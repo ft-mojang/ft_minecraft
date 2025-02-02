@@ -31,12 +31,12 @@ const Transaction = struct {
 };
 
 allocator: mem.Allocator,
-context: *const vulkan.Context,
+context: vulkan.Context,
 allocations: ArrayListUnmanaged(Allocation) = ArrayListUnmanaged(Allocation).empty,
 freed_indices: ArrayListUnmanaged(AllocationIndex) = ArrayListUnmanaged(AllocationIndex).empty,
 next_index: AllocationIndex = @enumFromInt(0),
 
-pub fn init(allocator: mem.Allocator, context: *const vulkan.Context) Self {
+pub fn init(allocator: mem.Allocator, context: vulkan.Context) Self {
     return Self{
         .allocator = allocator,
         .context = context,

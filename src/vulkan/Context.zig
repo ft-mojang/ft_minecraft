@@ -6,29 +6,15 @@ const Allocator = std.mem.Allocator;
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
+const vulkan = @import("vulkan.zig");
+const BaseDispatch = vulkan.BaseDispatch;
+const InstanceDispatch = vulkan.InstanceDispatch;
+const DeviceDispatch = vulkan.DeviceDispatch;
+const InstanceProxy = vulkan.InstanceProxy;
+const DeviceProxy = vulkan.DeviceProxy;
+const QueueProxy = vulkan.QueueProxy;
+
 const Self = @This();
-const BaseDispatch = vk.BaseWrapper(apis);
-const InstanceDispatch = vk.InstanceWrapper(apis);
-const DeviceDispatch = vk.DeviceWrapper(apis);
-const Instance = vk.InstanceProxy(apis);
-const Device = vk.DeviceProxy(apis);
-const Queue = vk.QueueProxy(apis);
-const CommandBuffer = vk.CommandBufferProxy(apis);
-
-const apis: []const vk.ApiInfo = &.{
-    vk.features.version_1_0,
-    vk.features.version_1_1,
-    vk.features.version_1_2,
-    vk.extensions.khr_surface,
-    vk.extensions.khr_swapchain,
-};
-
-const app_info: vk.ApplicationInfo = .{
-    .api_version = vk.API_VERSION_1_2,
-    .application_version = 0,
-    .engine_version = 0,
-    .p_application_name = "ft_minecraft",
-};
 
 const validation_layers = if (config.validation_layers) [_][*:0]const u8{
     "VK_LAYER_KHRONOS_validation",
@@ -56,28 +42,27 @@ allocator: Allocator,
 vkb: BaseDispatch,
 vki: InstanceDispatch,
 vkd: DeviceDispatch,
-instance: Instance,
+instance: InstanceProxy,
 surface: vk.SurfaceKHR,
 physical_device: vk.PhysicalDevice,
 physical_device_properties: vk.PhysicalDeviceProperties,
+device: DeviceProxy,
 queue_family_index: u32,
 queue_family_properties: vk.QueueFamilyProperties,
-device: Device,
-queue: Queue,
+queue: QueueProxy,
 
 pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
     window: glfw.Window,
-) !*Self {
-    var self = try allocator.create(Self);
-    errdefer allocator.destroy(self);
+) !Self {
+    var self: Self = undefined;
 
     self.allocator = allocator;
 
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
-    if (try self.vkb.enumerateInstanceVersion() < app_info.api_version) {
+    if (try self.vkb.enumerateInstanceVersion() < vulkan.app_info.api_version) {
         return error.InsufficientInstanceVersion;
     }
 
@@ -96,7 +81,7 @@ pub fn init(
     errdefer self.device.destroyDevice(null);
 
     const queue_handle = self.device.getDeviceQueue(self.queue_family_index, 0);
-    self.queue = Queue.init(queue_handle, self.device.wrapper);
+    self.queue = QueueProxy.init(queue_handle, self.device.wrapper);
 
     return self;
 }
@@ -135,7 +120,7 @@ fn initInstance(
     vkb: BaseDispatch,
     vki: *InstanceDispatch,
     platform_instance_extensions: [][*:0]const u8,
-) !Instance {
+) !InstanceProxy {
     var enabled_instance_extensions = try std.ArrayList([*:0]const u8)
         .initCapacity(allocator, instance_extensions.len + platform_instance_extensions.len);
     defer enabled_instance_extensions.deinit();
@@ -152,7 +137,7 @@ fn initInstance(
 
     const instance_create_info: vk.InstanceCreateInfo = .{
         .flags = .{ .enumerate_portability_bit_khr = (builtin.os.tag == .macos) },
-        .p_application_info = &app_info,
+        .p_application_info = &vulkan.app_info,
         .enabled_layer_count = validation_layers.len,
         .pp_enabled_layer_names = &validation_layers,
         .enabled_extension_count = @intCast(enabled_instance_extensions.items.len),
@@ -161,12 +146,12 @@ fn initInstance(
 
     const instance_handle = try vkb.createInstance(&instance_create_info, null);
     vki.* = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
-    return Instance.init(instance_handle, vki);
+    return InstanceProxy.init(instance_handle, vki.*);
 }
 
 fn pickPhysicalDevice(
     allocator: Allocator,
-    instance: Instance,
+    instance: InstanceProxy,
     physical_device_properties: *vk.PhysicalDeviceProperties,
 ) !vk.PhysicalDevice {
     var physical_device_count: u32 = undefined;
@@ -184,7 +169,7 @@ fn pickPhysicalDevice(
 
     const phys_device = physical_devices[0];
     const properties = instance.getPhysicalDeviceProperties(phys_device);
-    if (properties.api_version < app_info.api_version) {
+    if (properties.api_version < vulkan.app_info.api_version) {
         return error.InsufficientDeviceVersion;
     }
 
@@ -194,7 +179,7 @@ fn pickPhysicalDevice(
 
 fn pickQueueFamily(
     allocator: Allocator,
-    instance: Instance,
+    instance: InstanceProxy,
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
     queue_family_properties: *vk.QueueFamilyProperties,
@@ -223,11 +208,11 @@ fn pickQueueFamily(
 }
 
 fn initDevice(
-    instance: Instance,
+    instance: InstanceProxy,
     physical_device: vk.PhysicalDevice,
     queue_family_index: u32,
     vkd: *DeviceDispatch,
-) !Device {
+) !DeviceProxy {
     const device_create_info: vk.DeviceCreateInfo = .{
         .queue_create_info_count = 1,
         .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
@@ -246,5 +231,5 @@ fn initDevice(
 
     const device_handle = try instance.createDevice(physical_device, &device_create_info, null);
     vkd.* = try DeviceDispatch.load(device_handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
-    return Device.init(device_handle, vkd);
+    return DeviceProxy.init(device_handle, vkd.*);
 }
