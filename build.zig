@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     ) orelse false;
 
     const options = b.addOptions();
-    options.addOption(bool, "enable_validation_layers", enable_validation_layers);
+    options.addOption(bool, "validation_layers", enable_validation_layers);
 
     const exe = b.addExecutable(.{
         .name = exe_name,
@@ -89,7 +89,7 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const exe_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = root_source_file,
         .target = target,
         .optimize = optimize,
     });

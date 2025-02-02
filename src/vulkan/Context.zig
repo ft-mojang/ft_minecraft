@@ -30,7 +30,7 @@ const app_info: vk.ApplicationInfo = .{
     .p_application_name = "ft_minecraft",
 };
 
-const validation_layers = if (config.enable_validation_layers) [_][*:0]const u8{
+const validation_layers = if (config.validation_layers) [_][*:0]const u8{
     "VK_LAYER_KHRONOS_validation",
 } else [_][*:0]const u8{};
 
