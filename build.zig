@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Add options as a moduble importabled with @import("config")
+    // Add options as a moduble importable with @import("config")
     exe.root_module.addOptions("config", options);
     check.root_module.addOptions("config", options);
 
