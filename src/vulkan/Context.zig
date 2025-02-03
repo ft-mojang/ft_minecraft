@@ -1,18 +1,18 @@
+const vk = @import("vulkan");
+const glfw = @import("mach-glfw");
+
 const std = @import("std");
 const builtin = @import("builtin");
 const config = @import("config");
 const Allocator = std.mem.Allocator;
 
-const vk = @import("vulkan");
-const glfw = @import("mach-glfw");
-
 const vulkan = @import("vulkan.zig");
 const BaseDispatch = vulkan.BaseDispatch;
 const InstanceDispatch = vulkan.InstanceDispatch;
 const DeviceDispatch = vulkan.DeviceDispatch;
-const InstanceProxy = vulkan.InstanceProxy;
-const DeviceProxy = vulkan.DeviceProxy;
-const QueueProxy = vulkan.QueueProxy;
+const Instance = vulkan.InstanceProxy;
+const Device = vulkan.DeviceProxy;
+const Queue = vulkan.QueueProxy;
 
 const Self = @This();
 
@@ -40,16 +40,14 @@ const device_extensions = [_][*:0]const u8{
 
 allocator: Allocator,
 vkb: BaseDispatch,
-vki: InstanceDispatch,
-vkd: DeviceDispatch,
-instance: InstanceProxy,
+instance: Instance,
 surface: vk.SurfaceKHR,
 physical_device: vk.PhysicalDevice,
 physical_device_properties: vk.PhysicalDeviceProperties,
-device: DeviceProxy,
+device: Device,
 queue_family_index: u32,
 queue_family_properties: vk.QueueFamilyProperties,
-queue: QueueProxy,
+queue: Queue,
 
 pub fn init(
     allocator: Allocator,
@@ -66,7 +64,7 @@ pub fn init(
         return error.InsufficientInstanceVersion;
     }
 
-    self.instance = try initInstance(allocator, self.vkb, &self.vki, platform_instance_extensions);
+    self.instance = try initInstance(allocator, self.vkb, platform_instance_extensions);
     errdefer self.instance.destroyInstance(null);
 
     if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
@@ -74,14 +72,14 @@ pub fn init(
     }
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
-    self.physical_device = try pickPhysicalDevice(allocator, self.instance, &self.physical_device_properties);
-    self.queue_family_index = try pickQueueFamily(allocator, self.instance, self.physical_device, self.surface, &self.queue_family_properties);
+    self.physical_device, self.physical_device_properties = try pickPhysicalDevice(allocator, self.instance);
+    self.queue_family_index, self.queue_family_properties = try pickQueueFamily(allocator, self.instance, self.physical_device, self.surface);
 
-    self.device = try initDevice(self.instance, self.physical_device, self.queue_family_index, &self.vkd);
+    self.device = try initDevice(self.instance, self.physical_device, self.queue_family_index);
     errdefer self.device.destroyDevice(null);
 
     const queue_handle = self.device.getDeviceQueue(self.queue_family_index, 0);
-    self.queue = QueueProxy.init(queue_handle, self.device.wrapper);
+    self.queue = Queue.init(queue_handle, self.device.wrapper);
 
     return self;
 }
@@ -118,9 +116,8 @@ pub fn findMemoryType(
 fn initInstance(
     allocator: Allocator,
     vkb: BaseDispatch,
-    vki: *InstanceDispatch,
     platform_instance_extensions: [][*:0]const u8,
-) !InstanceProxy {
+) !Instance {
     var enabled_instance_extensions = try std.ArrayList([*:0]const u8)
         .initCapacity(allocator, instance_extensions.len + platform_instance_extensions.len);
     defer enabled_instance_extensions.deinit();
@@ -145,15 +142,11 @@ fn initInstance(
     };
 
     const instance_handle = try vkb.createInstance(&instance_create_info, null);
-    vki.* = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
-    return InstanceProxy.init(instance_handle, vki.*);
+    const vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
+    return Instance.init(instance_handle, vki);
 }
 
-fn pickPhysicalDevice(
-    allocator: Allocator,
-    instance: InstanceProxy,
-    physical_device_properties: *vk.PhysicalDeviceProperties,
-) !vk.PhysicalDevice {
+fn pickPhysicalDevice(allocator: Allocator, instance: Instance) !struct { vk.PhysicalDevice, vk.PhysicalDeviceProperties } {
     var physical_device_count: u32 = undefined;
     if (try instance.enumeratePhysicalDevices(&physical_device_count, null) != vk.Result.success) {
         return error.PhysicalDeviceEnumerationFailed;
@@ -173,17 +166,15 @@ fn pickPhysicalDevice(
         return error.InsufficientDeviceVersion;
     }
 
-    physical_device_properties.* = properties;
-    return phys_device;
+    return .{ phys_device, properties };
 }
 
 fn pickQueueFamily(
     allocator: Allocator,
-    instance: InstanceProxy,
+    instance: Instance,
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
-    queue_family_properties: *vk.QueueFamilyProperties,
-) !u32 {
+) !struct { u32, vk.QueueFamilyProperties } {
     var queue_family_count: u32 = undefined;
     instance.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, null);
     if (queue_family_count == 0) {
@@ -200,19 +191,17 @@ fn pickQueueFamily(
         if (try instance.getPhysicalDeviceSurfaceSupportKHR(physical_device, index, surface) == vk.FALSE) {
             continue;
         }
-        queue_family_properties.* = properties;
-        return index;
+        return .{ index, properties };
     } else {
         return error.NoSuitableQueueFamily;
     }
 }
 
 fn initDevice(
-    instance: InstanceProxy,
+    instance: Instance,
     physical_device: vk.PhysicalDevice,
     queue_family_index: u32,
-    vkd: *DeviceDispatch,
-) !DeviceProxy {
+) !Device {
     const device_create_info: vk.DeviceCreateInfo = .{
         .queue_create_info_count = 1,
         .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
@@ -230,6 +219,6 @@ fn initDevice(
     };
 
     const device_handle = try instance.createDevice(physical_device, &device_create_info, null);
-    vkd.* = try DeviceDispatch.load(device_handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
-    return DeviceProxy.init(device_handle, vkd.*);
+    const vkd = try DeviceDispatch.load(device_handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
+    return Device.init(device_handle, vkd);
 }
