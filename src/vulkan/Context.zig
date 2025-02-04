@@ -88,7 +88,6 @@ pub fn deinit(self: *Self) void {
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
-    self.allocator.destroy(self);
 }
 
 pub fn findMemoryType(
