@@ -57,8 +57,14 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    var vk_ctx = try VulkanContext.init(gpa, fn_get_proc_addr, glfw_extensions, window);
+    var vk_ctx = try VulkanContext.init(gpa, fn_get_proc_addr, glfw_extensions);
     defer vk_ctx.deinit();
+
+    if (glfw.createWindowSurface(vk_ctx.instance.handle, window, null, &vk_ctx.surface) != 0) {
+        std.log.err("failed to create Vulkan surface: {?s}", .{glfw.getErrorString()});
+        return error.CreateSurfaceFailed;
+    }
+    errdefer vk_ctx.instance.destroySurfaceKHR(vk_ctx.surface, null);
 
     var vk_allocator = VulkanAllocator.init(gpa, vk_ctx);
     defer vk_allocator.deinit();

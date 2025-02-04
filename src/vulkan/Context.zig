@@ -1,5 +1,4 @@
 const vk = @import("vulkan");
-const glfw = @import("mach-glfw");
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -53,7 +52,6 @@ pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     platform_instance_extensions: [][*:0]const u8,
-    window: glfw.Window,
 ) !Self {
     var self: Self = undefined;
 
@@ -66,11 +64,6 @@ pub fn init(
 
     self.instance = try initInstance(allocator, self.vkb, platform_instance_extensions);
     errdefer self.instance.destroyInstance(null);
-
-    if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
-        return error.SurfaceCreationFailed;
-    }
-    errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
     self.physical_device, self.physical_device_properties = try pickPhysicalDevice(allocator, self.instance);
     self.queue_family_index, self.queue_family_properties = try pickQueueFamily(allocator, self.instance, self.physical_device, self.surface);
