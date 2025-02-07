@@ -9,8 +9,8 @@ pub fn build(b: *std.Build) void {
     const enable_validation_layers = b.option(
         bool,
         "validation_layers",
-        "Enable validation layers (default: false)",
-    ) orelse false;
+        "Enable validation layers (default: true iff debug)",
+    ) orelse (optimize == .Debug);
 
     const options = b.addOptions();
     options.addOption(bool, "validation_layers", enable_validation_layers);
