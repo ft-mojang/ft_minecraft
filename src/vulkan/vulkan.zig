@@ -1,3 +1,6 @@
+const builtin = @import("builtin");
+const config = @import("config");
+
 const vk = @import("vulkan");
 pub const BaseDispatch = vk.BaseWrapper(apis);
 pub const InstanceDispatch = vk.InstanceWrapper(apis);
@@ -21,4 +24,26 @@ pub const apis: []const vk.ApiInfo = &.{
     vk.features.version_1_2,
     vk.extensions.khr_surface,
     vk.extensions.khr_swapchain,
+};
+
+pub const validation_layers = if (config.validation_layers) [_][*:0]const u8{
+    "VK_LAYER_KHRONOS_validation",
+} else [_][*:0]const u8{};
+
+pub const instance_exts = [_][*:0]const u8{
+    vk.extensions.khr_surface.name,
+} ++ switch (builtin.os.tag) {
+    .macos => [_][*:0]const u8{
+        vk.extensions.khr_portability_enumeration.name,
+    },
+    else => [_][*:0]const u8{},
+};
+
+pub const device_exts = [_][*:0]const u8{
+    vk.extensions.khr_swapchain.name,
+} ++ switch (builtin.os.tag) {
+    .macos => [_][*:0]const u8{
+        vk.extensions.khr_portability_subset.name,
+    },
+    else => [_][*:0]const u8{},
 };

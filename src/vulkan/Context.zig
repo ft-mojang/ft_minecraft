@@ -3,7 +3,6 @@ const glfw = @import("mach-glfw");
 
 const std = @import("std");
 const builtin = @import("builtin");
-const config = @import("config");
 const Allocator = std.mem.Allocator;
 
 const vulkan = @import("vulkan.zig");
@@ -15,28 +14,6 @@ const Device = vulkan.DeviceProxy;
 const Queue = vulkan.QueueProxy;
 
 const Self = @This();
-
-const validation_layers = if (config.validation_layers) [_][*:0]const u8{
-    "VK_LAYER_KHRONOS_validation",
-} else [_][*:0]const u8{};
-
-const instance_extensions = [_][*:0]const u8{
-    vk.extensions.khr_surface.name,
-} ++ switch (builtin.os.tag) {
-    .macos => [_][*:0]const u8{
-        vk.extensions.khr_portability_enumeration.name,
-    },
-    else => [_][*:0]const u8{},
-};
-
-const device_extensions = [_][*:0]const u8{
-    vk.extensions.khr_swapchain.name,
-} ++ switch (builtin.os.tag) {
-    .macos => [_][*:0]const u8{
-        vk.extensions.khr_portability_subset.name,
-    },
-    else => [_][*:0]const u8{},
-};
 
 allocator: Allocator,
 vkb: BaseDispatch,
@@ -52,7 +29,7 @@ queue: Queue,
 pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
-    platform_instance_extensions: [][*:0]const u8,
+    platform_instance_exts: [][*:0]const u8,
     window: glfw.Window,
 ) !Self {
     var self: Self = undefined;
@@ -64,7 +41,7 @@ pub fn init(
         return error.InsufficientInstanceVersion;
     }
 
-    self.instance = try initInstance(allocator, self.vkb, platform_instance_extensions);
+    self.instance = try initInstance(allocator, self.vkb, platform_instance_exts);
     errdefer self.instance.destroyInstance(null);
 
     if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
@@ -116,29 +93,29 @@ pub fn findMemoryType(
 fn initInstance(
     allocator: Allocator,
     vkb: BaseDispatch,
-    platform_instance_extensions: [][*:0]const u8,
+    platform_instance_exts: [][*:0]const u8,
 ) !Instance {
-    var enabled_instance_extensions = try std.ArrayList([*:0]const u8)
-        .initCapacity(allocator, instance_extensions.len + platform_instance_extensions.len);
-    defer enabled_instance_extensions.deinit();
-    enabled_instance_extensions.appendSliceAssumeCapacity(&instance_extensions);
-    for (platform_instance_extensions) |platform_ext| {
-        for (enabled_instance_extensions.items) |enabled_ext| {
+    var enabled_instance_exts = try std.ArrayList([*:0]const u8)
+        .initCapacity(allocator, vulkan.instance_exts.len + platform_instance_exts.len);
+    defer enabled_instance_exts.deinit();
+    enabled_instance_exts.appendSliceAssumeCapacity(&vulkan.instance_exts);
+    for (platform_instance_exts) |platform_ext| {
+        for (enabled_instance_exts.items) |enabled_ext| {
             if (std.mem.eql(u8, std.mem.span(platform_ext), std.mem.span(enabled_ext))) {
                 break;
             }
         } else {
-            enabled_instance_extensions.appendAssumeCapacity(platform_ext);
+            enabled_instance_exts.appendAssumeCapacity(platform_ext);
         }
     }
 
     const instance_create_info: vk.InstanceCreateInfo = .{
         .flags = .{ .enumerate_portability_bit_khr = (builtin.os.tag == .macos) },
         .p_application_info = &vulkan.app_info,
-        .enabled_layer_count = validation_layers.len,
-        .pp_enabled_layer_names = &validation_layers,
-        .enabled_extension_count = @intCast(enabled_instance_extensions.items.len),
-        .pp_enabled_extension_names = enabled_instance_extensions.items.ptr,
+        .enabled_layer_count = vulkan.validation_layers.len,
+        .pp_enabled_layer_names = &vulkan.validation_layers,
+        .enabled_extension_count = @intCast(enabled_instance_exts.items.len),
+        .pp_enabled_extension_names = enabled_instance_exts.items.ptr,
     };
 
     const instance_handle = try vkb.createInstance(&instance_create_info, null);
@@ -211,10 +188,10 @@ fn initDevice(
                 .queue_family_index = queue_family_index,
             },
         },
-        .enabled_layer_count = validation_layers.len,
-        .pp_enabled_layer_names = &validation_layers,
-        .enabled_extension_count = device_extensions.len,
-        .pp_enabled_extension_names = &device_extensions,
+        .enabled_layer_count = vulkan.validation_layers.len,
+        .pp_enabled_layer_names = &vulkan.validation_layers,
+        .enabled_extension_count = vulkan.device_exts.len,
+        .pp_enabled_extension_names = &vulkan.device_exts,
         .p_enabled_features = &.{},
     };
 
