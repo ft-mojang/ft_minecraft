@@ -4,7 +4,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 const vulkan = @import("../vulkan.zig");
 
-const DedicatedAllocator = @import("DedicatedAllocator.zig");
+const DedicatedAllocator = @import("allocator/DedicatedAllocator.zig");
 
 const mem = std.mem;
 const debug = std.debug;

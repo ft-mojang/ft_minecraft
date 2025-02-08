@@ -1,8 +1,8 @@
 /// Dedicated memory allocator.
 const std = @import("std");
 const vk = @import("vulkan");
-const vka = @import("allocator.zig");
-const vulkan = @import("../vulkan.zig");
+const vulkan = @import("../../vulkan.zig");
+const vka = vulkan.allocator;
 
 const debug = std.debug;
 const mem = std.mem;

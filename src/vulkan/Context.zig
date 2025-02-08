@@ -5,7 +5,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
-const vulkan = @import("vulkan.zig");
+const vulkan = @import("../vulkan.zig");
 const BaseDispatch = vulkan.BaseDispatch;
 const InstanceDispatch = vulkan.InstanceDispatch;
 const DeviceDispatch = vulkan.DeviceDispatch;

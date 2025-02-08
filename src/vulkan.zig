@@ -9,8 +9,8 @@ pub const InstanceProxy = vk.InstanceProxy(apis);
 pub const DeviceProxy = vk.DeviceProxy(apis);
 pub const QueueProxy = vk.QueueProxy(apis);
 
-pub usingnamespace @import("allocator/allocator.zig");
-pub const Context = @import("Context.zig");
+pub const Context = @import("vulkan/Context.zig");
+pub const allocator = @import("vulkan/allocator.zig");
 
 pub const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,

@@ -3,9 +3,9 @@ const std = @import("std");
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
-const vulkan = @import("vulkan/vulkan.zig");
+const vulkan = @import("vulkan.zig");
 const VulkanContext = vulkan.Context;
-const VulkanAllocator = vulkan.Allocator;
+const VulkanAllocator = vulkan.allocator.Allocator;
 
 const window_title = "ft_minecraft";
 const window_width = 640;
