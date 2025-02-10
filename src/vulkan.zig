@@ -32,12 +32,12 @@ pub const validation_layers_req = if (config.validation_layers) [_][*:0]const u8
 
 pub const validation_layers_opt = if (config.validation_layers) [_][*:0]const u8{} else [_][*:0]const u8{};
 
-pub const enabled_validation_features = [_]vk.ValidationFeatureEnableEXT{
+pub const enabled_validation_features = if (config.validation_layers) [_]vk.ValidationFeatureEnableEXT{
     .best_practices_ext,
     .gpu_assisted_ext,
     .gpu_assisted_reserve_binding_slot_ext,
     .synchronization_validation_ext,
-};
+} else [_]vk.ValidationFeatureEnableEXT{};
 
 pub const disabled_validation_features = [_]vk.ValidationFeatureDisableEXT{};
 
