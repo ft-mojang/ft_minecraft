@@ -26,12 +26,24 @@ pub const apis: []const vk.ApiInfo = &.{
     vk.extensions.khr_swapchain,
 };
 
-pub const validation_layers = if (config.validation_layers) [_][*:0]const u8{
+pub const validation_layers_req = if (config.validation_layers) [_][*:0]const u8{
     "VK_LAYER_KHRONOS_validation",
 } else [_][*:0]const u8{};
 
-pub const instance_exts = [_][*:0]const u8{
+pub const validation_layers_opt = if (config.validation_layers) [_][*:0]const u8{} else [_][*:0]const u8{};
+
+pub const enabled_validation_features = [_]vk.ValidationFeatureEnableEXT{
+    .best_practices_ext,
+    .gpu_assisted_ext,
+    .gpu_assisted_reserve_binding_slot_ext,
+    .synchronization_validation_ext,
+};
+
+pub const disabled_validation_features = [_]vk.ValidationFeatureDisableEXT{};
+
+pub const instance_exts_req = [_][*:0]const u8{
     vk.extensions.khr_surface.name,
+    vk.extensions.ext_validation_features.name,
 } ++ switch (builtin.os.tag) {
     .macos => [_][*:0]const u8{
         vk.extensions.khr_portability_enumeration.name,
@@ -39,7 +51,11 @@ pub const instance_exts = [_][*:0]const u8{
     else => [_][*:0]const u8{},
 };
 
-pub const device_exts = [_][*:0]const u8{
+pub const instance_exts_opt = [_][*:0]const u8{
+    vk.extensions.ext_debug_utils,
+};
+
+pub const device_exts_req = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
 } ++ switch (builtin.os.tag) {
     .macos => [_][*:0]const u8{
@@ -47,3 +63,5 @@ pub const device_exts = [_][*:0]const u8{
     },
     else => [_][*:0]const u8{},
 };
+
+pub const device_exts_opt = [_][*:0]const u8{};

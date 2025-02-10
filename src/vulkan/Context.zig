@@ -2,8 +2,8 @@ const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
 const std = @import("std");
-const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
+const builtin = @import("builtin");
 
 const vulkan = @import("../vulkan.zig");
 const BaseDispatch = vulkan.BaseDispatch;
@@ -96,9 +96,9 @@ fn initInstance(
     platform_instance_exts: [][*:0]const u8,
 ) !Instance {
     var enabled_instance_exts = try std.ArrayList([*:0]const u8)
-        .initCapacity(allocator, vulkan.instance_exts.len + platform_instance_exts.len);
+        .initCapacity(allocator, vulkan.instance_exts_req.len + platform_instance_exts.len);
     defer enabled_instance_exts.deinit();
-    enabled_instance_exts.appendSliceAssumeCapacity(&vulkan.instance_exts);
+    enabled_instance_exts.appendSliceAssumeCapacity(&vulkan.instance_exts_req);
     for (platform_instance_exts) |platform_ext| {
         for (enabled_instance_exts.items) |enabled_ext| {
             if (std.mem.eql(u8, std.mem.span(platform_ext), std.mem.span(enabled_ext))) {
@@ -109,11 +109,19 @@ fn initInstance(
         }
     }
 
+    const validation_features = vk.ValidationFeaturesEXT{
+        .enabled_validation_feature_count = vulkan.enabled_validation_features.len,
+        .p_enabled_validation_features = &vulkan.enabled_validation_features,
+        .disabled_validation_feature_count = vulkan.disabled_validation_features.len,
+        .p_disabled_validation_features = &vulkan.disabled_validation_features,
+    };
+
     const instance_create_info: vk.InstanceCreateInfo = .{
+        .p_next = &validation_features,
         .flags = .{ .enumerate_portability_bit_khr = (builtin.os.tag == .macos) },
         .p_application_info = &vulkan.app_info,
-        .enabled_layer_count = vulkan.validation_layers.len,
-        .pp_enabled_layer_names = &vulkan.validation_layers,
+        .enabled_layer_count = vulkan.validation_layers_req.len,
+        .pp_enabled_layer_names = &vulkan.validation_layers_req,
         .enabled_extension_count = @intCast(enabled_instance_exts.items.len),
         .pp_enabled_extension_names = enabled_instance_exts.items.ptr,
     };
@@ -188,10 +196,10 @@ fn initDevice(
                 .queue_family_index = queue_family_index,
             },
         },
-        .enabled_layer_count = vulkan.validation_layers.len,
-        .pp_enabled_layer_names = &vulkan.validation_layers,
-        .enabled_extension_count = vulkan.device_exts.len,
-        .pp_enabled_extension_names = &vulkan.device_exts,
+        .enabled_layer_count = vulkan.validation_layers_req.len,
+        .pp_enabled_layer_names = &vulkan.validation_layers_req,
+        .enabled_extension_count = vulkan.device_exts_req.len,
+        .pp_enabled_extension_names = &vulkan.device_exts_req,
         .p_enabled_features = &.{},
     };
 
