@@ -132,19 +132,8 @@ fn initInstance(
 }
 
 fn pickPhysicalDevice(allocator: Allocator, instance: Instance) !struct { vk.PhysicalDevice, vk.PhysicalDeviceProperties } {
-    var physical_device_count: u32 = undefined;
-    if (try instance.enumeratePhysicalDevices(&physical_device_count, null) != vk.Result.success) {
-        return error.PhysicalDeviceEnumerationFailed;
-    }
-    if (physical_device_count == 0) {
-        return error.ZeroPhysicalDevicesFound;
-    }
-    const physical_devices = try allocator.alloc(vk.PhysicalDevice, physical_device_count);
+    const physical_devices = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(physical_devices);
-    if (try instance.enumeratePhysicalDevices(&physical_device_count, physical_devices.ptr) != vk.Result.success) {
-        return error.PhysicalDeviceEnumerationFailed;
-    }
-
     const phys_device = physical_devices[0];
     const properties = instance.getPhysicalDeviceProperties(phys_device);
     if (properties.api_version < vulkan.app_info.api_version) {
@@ -160,14 +149,8 @@ fn pickQueueFamily(
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
 ) !struct { u32, vk.QueueFamilyProperties } {
-    var queue_family_count: u32 = undefined;
-    instance.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, null);
-    if (queue_family_count == 0) {
-        return error.ZeroQueueFamiliesFound;
-    }
-    const device_queue_family_properties = try allocator.alloc(vk.QueueFamilyProperties, queue_family_count);
+    const device_queue_family_properties = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, allocator);
     defer allocator.free(device_queue_family_properties);
-    instance.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, device_queue_family_properties.ptr);
     for (device_queue_family_properties, 0..) |properties, i| {
         if (!properties.queue_flags.graphics_bit) {
             continue;
