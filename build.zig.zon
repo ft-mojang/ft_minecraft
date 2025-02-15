@@ -25,7 +25,7 @@
     .dependencies = .{
         .vulkan_zig = .{
             .url = "https://github.com/ft-mojang/vulkan-zig/archive/refs/heads/master.zip",
-            .hash = "1220c14cc07656b1935b138087192cfcafdd19cd05150c66f1ee5d823f1af1f7a1ce",
+            .hash = "12204de7a3cd77b9c899aa130774b5ccb9654911d29bb060a6be9d39116929065ead",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.3.296.zip",
