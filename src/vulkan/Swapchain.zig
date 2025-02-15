@@ -140,7 +140,7 @@ pub fn init(
         .image_extent = capabilities.current_extent,
         .image_array_layers = 1,
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
-        .image_sharing_mode = .concurrent,
+        .image_sharing_mode = .exclusive,
         .queue_family_index_count = 1,
         .p_queue_family_indices = &.{context.queue_family_index},
         .pre_transform = capabilities.current_transform,
