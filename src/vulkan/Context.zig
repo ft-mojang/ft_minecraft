@@ -2,7 +2,10 @@ const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
 const std = @import("std");
-const Allocator = std.mem.Allocator;
+const log = std.log;
+const mem = std.mem;
+const Allocator = mem.Allocator;
+const ArrayList = std.ArrayList;
 const builtin = @import("builtin");
 
 const vulkan = @import("../vulkan.zig");
@@ -45,7 +48,7 @@ pub fn init(
     errdefer self.instance.destroyInstance(null);
 
     if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
-        std.log.err("failed to create Vulkan surface: {?s}", .{glfw.getErrorString()});
+        log.err("failed to create Vulkan surface: {?s}", .{glfw.getErrorString()});
         return error.CreateSurfaceFailed;
     }
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
@@ -73,13 +76,13 @@ fn initInstance(
     vkb: BaseDispatch,
     platform_instance_exts: [][*:0]const u8,
 ) !Instance {
-    var enabled_instance_exts = try std.ArrayList([*:0]const u8)
+    var enabled_instance_exts = try ArrayList([*:0]const u8)
         .initCapacity(allocator, vulkan.instance_exts_req.len + platform_instance_exts.len);
     defer enabled_instance_exts.deinit();
     enabled_instance_exts.appendSliceAssumeCapacity(&vulkan.instance_exts_req);
     for (platform_instance_exts) |platform_ext| {
         for (enabled_instance_exts.items) |enabled_ext| {
-            if (std.mem.eql(u8, std.mem.span(platform_ext), std.mem.span(enabled_ext))) {
+            if (mem.eql(u8, mem.span(platform_ext), mem.span(enabled_ext))) {
                 break;
             }
         } else {
