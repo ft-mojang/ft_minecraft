@@ -29,6 +29,10 @@ pub fn main() !void {
     defer _ = general_purpose_allocator.deinit();
     const gpa = general_purpose_allocator.allocator();
 
+    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
+    defer _ = arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+
     glfw.setErrorCallback(logGLFWError);
 
     if (!glfw.init(.{})) {
@@ -57,10 +61,10 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    var vk_ctx = try VulkanContext.init(gpa, fn_get_proc_addr, glfw_extensions, window);
+    var vk_ctx = try VulkanContext.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var vk_allocator = VulkanAllocator.init(gpa, vk_ctx);
+    var vk_allocator = VulkanAllocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
