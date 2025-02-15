@@ -9,9 +9,9 @@ const vulkan = @import("../vulkan.zig");
 const BaseDispatch = vulkan.BaseDispatch;
 const InstanceDispatch = vulkan.InstanceDispatch;
 const DeviceDispatch = vulkan.DeviceDispatch;
-const Instance = vulkan.InstanceProxy;
-const Device = vulkan.DeviceProxy;
-const Queue = vulkan.QueueProxy;
+const Instance = vulkan.Instance;
+const Device = vulkan.Device;
+const Queue = vulkan.Queue;
 
 const Self = @This();
 
@@ -66,28 +66,6 @@ pub fn deinit(self: *Self) void {
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
-}
-
-pub fn findMemoryType(
-    self: *const Self,
-    type_filter: u32,
-    flags: vk.MemoryPropertyFlags,
-) !u32 {
-    const properties = self.instance.getPhysicalDeviceMemoryProperties(self.physical_device);
-
-    for (0..properties.memory_type_count) |memory_type| {
-        if (type_filter & (@as(u32, 1) << @intCast(memory_type)) == 0) {
-            continue;
-        }
-
-        const property_flags = properties.memory_types[memory_type].property_flags;
-
-        if (flags.intersect(property_flags) == flags) {
-            return @intCast(memory_type);
-        }
-    }
-
-    return error.MemoryTypeNotFound;
 }
 
 fn initInstance(

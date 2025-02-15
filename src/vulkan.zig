@@ -5,9 +5,9 @@ const vk = @import("vulkan");
 pub const BaseDispatch = vk.BaseWrapper(apis);
 pub const InstanceDispatch = vk.InstanceWrapper(apis);
 pub const DeviceDispatch = vk.DeviceWrapper(apis);
-pub const InstanceProxy = vk.InstanceProxy(apis);
-pub const DeviceProxy = vk.DeviceProxy(apis);
-pub const QueueProxy = vk.QueueProxy(apis);
+pub const Instance = vk.InstanceProxy(apis);
+pub const Device = vk.DeviceProxy(apis);
+pub const Queue = vk.QueueProxy(apis);
 
 pub const Context = @import("vulkan/Context.zig");
 pub const allocator = @import("vulkan/allocator.zig");
@@ -65,3 +65,26 @@ pub const device_exts_req = [_][*:0]const u8{
 };
 
 pub const device_exts_opt = [_][*:0]const u8{};
+
+pub fn findMemoryType(
+    instance: Instance,
+    physical_device: vk.PhysicalDevice,
+    type_filter: u32,
+    flags: vk.MemoryPropertyFlags,
+) !u32 {
+    const properties = instance.getPhysicalDeviceMemoryProperties(physical_device);
+
+    for (0..properties.memory_type_count) |memory_type| {
+        if (type_filter & (@as(u32, 1) << @intCast(memory_type)) == 0) {
+            continue;
+        }
+
+        const property_flags = properties.memory_types[memory_type].property_flags;
+
+        if (flags.intersect(property_flags) == flags) {
+            return @intCast(memory_type);
+        }
+    }
+
+    return error.MemoryTypeNotFound;
+}
