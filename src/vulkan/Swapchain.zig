@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
-const vulkan = @import("vulkan.zig");
+const vulkan = @import("../vulkan.zig");
 const VulkanContext = vulkan.Context;
 
 const Self = @This();

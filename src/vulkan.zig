@@ -11,6 +11,7 @@ pub const Queue = vk.QueueProxy(apis);
 
 pub const Context = @import("vulkan/Context.zig");
 pub const allocator = @import("vulkan/allocator.zig");
+pub const Swapchain = @import("vulkan/Swapchain.zig");
 
 pub const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,
