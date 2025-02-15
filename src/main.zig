@@ -65,14 +65,10 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-<<<<<<< HEAD
     var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
     defer vk_swpchain.deinit(vk_ctx);
 
-    var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
-=======
     var vk_allocator = VulkanAllocator.init(arena, vk_ctx);
->>>>>>> main
     defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
