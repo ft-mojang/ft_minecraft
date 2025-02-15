@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/ft-mojang/vulkan-zig/archive/529c4a991511a4961563125fea644f01cb021d7c.zip",
-            .hash = "1220cc559fca714282ce8edb66c94f546db7b7a746e967c2a36f22d2c15f63541cbf",
+            .url = "https://github.com/ft-mojang/vulkan-zig/archive/refs/heads/master.zip",
+            .hash = "12204de7a3cd77b9c899aa130774b5ccb9654911d29bb060a6be9d39116929065ead",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.3.296.zip",
@@ -33,7 +33,7 @@
         },
         .mach_glfw = .{
             .url = "https://github.com/ft-mojang/mach-glfw/archive/refs/heads/main.zip",
-            .hash = "1220365c8eaaa7571d85d1f513ba02c68ae1c61c607ae009b6ec4f0a248734de2bc1",
+            .hash = "122022ea6df16700e521078c20d7d01f894c6f967e6c6ce1ea166426b4fc61667de3",
         },
     },
 

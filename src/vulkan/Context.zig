@@ -1,87 +1,62 @@
-const std = @import("std");
-const builtin = @import("builtin");
-const Allocator = std.mem.Allocator;
-
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
+const std = @import("std");
+const log = std.log;
+const mem = std.mem;
+const Allocator = mem.Allocator;
+const ArrayList = std.ArrayList;
+const builtin = @import("builtin");
+
+const vulkan = @import("../vulkan.zig");
+const BaseDispatch = vulkan.BaseDispatch;
+const InstanceDispatch = vulkan.InstanceDispatch;
+const DeviceDispatch = vulkan.DeviceDispatch;
+const Instance = vulkan.Instance;
+const Device = vulkan.Device;
+const Queue = vulkan.Queue;
+
 const Self = @This();
-const BaseDispatch = vk.BaseWrapper(apis);
-const InstanceDispatch = vk.InstanceWrapper(apis);
-const DeviceDispatch = vk.DeviceWrapper(apis);
-const Instance = vk.InstanceProxy(apis);
-const Device = vk.DeviceProxy(apis);
-const Queue = vk.QueueProxy(apis);
-const CommandBuffer = vk.CommandBufferProxy(apis);
 
-const apis: []const vk.ApiInfo = &.{
-    vk.features.version_1_0,
-    vk.features.version_1_1,
-    vk.features.version_1_2,
-    vk.extensions.khr_surface,
-    vk.extensions.khr_swapchain,
-};
-
-const app_info: vk.ApplicationInfo = .{
-    .api_version = vk.API_VERSION_1_2,
-    .application_version = 0,
-    .engine_version = 0,
-    .p_application_name = "ft_minecraft",
-};
-
-const validation_layers = if (builtin.mode == .Debug) [_][*:0]const u8{
-    "VK_LAYER_KHRONOS_validation",
-} else [_][*:0]const u8{};
-
-const instance_extensions = [_][*:0]const u8{
-    vk.extensions.khr_surface.name,
-} ++ switch (builtin.os.tag) {
-    .macos => [_][*:0]const u8{
-        vk.extensions.khr_portability_enumeration.name,
-    },
-    else => [_][*:0]const u8{},
-};
-
-const device_extensions = [_][*:0]const u8{
-    vk.extensions.khr_swapchain.name,
-} ++ switch (builtin.os.tag) {
-    .macos => [_][*:0]const u8{
-        vk.extensions.khr_portability_subset.name,
-    },
-    else => [_][*:0]const u8{},
-};
-
+allocator: Allocator,
 vkb: BaseDispatch,
 instance: Instance,
 surface: vk.SurfaceKHR,
 physical_device: vk.PhysicalDevice,
 physical_device_properties: vk.PhysicalDeviceProperties,
+device: Device,
 queue_family_index: u32,
 queue_family_properties: vk.QueueFamilyProperties,
-device: Device,
 queue: Queue,
 
 pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
-    platform_instance_extensions: [][*:0]const u8,
+    platform_instance_exts: [][*:0]const u8,
     window: glfw.Window,
 ) !Self {
     var self: Self = undefined;
+
+    self.allocator = allocator;
+
     self.vkb = try BaseDispatch.load(fn_get_instance_proc_addr);
-    if (try self.vkb.enumerateInstanceVersion() < app_info.api_version) {
+    if (try self.vkb.enumerateInstanceVersion() < vulkan.app_info.api_version) {
         return error.InsufficientInstanceVersion;
     }
 
-    try self.initInstance(allocator, platform_instance_extensions);
+    self.instance = try initInstance(allocator, self.vkb, platform_instance_exts);
     errdefer self.instance.destroyInstance(null);
 
     if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
-        return error.SurfaceCreationFailed;
+        log.err("failed to create Vulkan surface: {?s}", .{glfw.getErrorString()});
+        return error.CreateSurfaceFailed;
     }
     errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
-    try self.initDevice(allocator);
+    self.physical_device, self.physical_device_properties = try pickPhysicalDevice(allocator, self.instance);
+    self.queue_family_index, self.queue_family_properties = try pickQueueFamily(allocator, self.instance, self.physical_device, self.surface);
+
+    self.device = try initDevice(self.instance, self.physical_device, self.queue_family_index);
     errdefer self.device.destroyDevice(null);
 
     const queue_handle = self.device.getDeviceQueue(self.queue_family_index, 0);
@@ -90,139 +65,109 @@ pub fn init(
     return self;
 }
 
-pub fn deinit(self: Self) void {
+pub fn deinit(self: *Self) void {
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
 }
 
-pub fn findMemoryType(self: Self, type_filter: u32, flags: vk.MemoryPropertyFlags) !u32 {
-    const properties = self.instance.getPhysicalDeviceMemoryProperties(self.physical_device);
-
-    for (0..properties.memory_type_count) |memory_type| {
-        if (type_filter & (@as(u32, 1) << @intCast(memory_type)) == 0) {
-            continue;
-        }
-
-        const property_flags = properties.memory_types[memory_type].property_flags;
-
-        if (flags.intersect(property_flags) == flags) {
-            return @intCast(memory_type);
-        }
-    }
-
-    return error.MemoryTypeNotFound;
-}
-
 fn initInstance(
-    self: *Self,
     allocator: Allocator,
-    platform_instance_extensions: [][*:0]const u8,
-) !void {
-    var enabled_instance_extensions = try std.ArrayList([*:0]const u8)
-        .initCapacity(allocator, instance_extensions.len + platform_instance_extensions.len);
-    defer enabled_instance_extensions.deinit();
-    enabled_instance_extensions.appendSliceAssumeCapacity(&instance_extensions);
-    for (platform_instance_extensions) |platform_ext| {
-        for (enabled_instance_extensions.items) |enabled_ext| {
-            if (std.mem.eql(u8, std.mem.span(platform_ext), std.mem.span(enabled_ext))) {
+    vkb: BaseDispatch,
+    platform_instance_exts: [][*:0]const u8,
+) !Instance {
+    var enabled_instance_exts = try ArrayList([*:0]const u8)
+        .initCapacity(allocator, vulkan.instance_exts_req.len + platform_instance_exts.len);
+    defer enabled_instance_exts.deinit();
+    enabled_instance_exts.appendSliceAssumeCapacity(&vulkan.instance_exts_req);
+    for (platform_instance_exts) |platform_ext| {
+        for (enabled_instance_exts.items) |enabled_ext| {
+            if (mem.eql(u8, mem.span(platform_ext), mem.span(enabled_ext))) {
                 break;
             }
         } else {
-            enabled_instance_extensions.appendAssumeCapacity(platform_ext);
+            enabled_instance_exts.appendAssumeCapacity(platform_ext);
         }
     }
 
-    const instance_create_info: vk.InstanceCreateInfo = .{
-        .flags = .{ .enumerate_portability_bit_khr = (builtin.os.tag == .macos) },
-        .p_application_info = &app_info,
-        .enabled_layer_count = validation_layers.len,
-        .pp_enabled_layer_names = &validation_layers,
-        .enabled_extension_count = @intCast(enabled_instance_extensions.items.len),
-        .pp_enabled_extension_names = enabled_instance_extensions.items.ptr,
+    const validation_features = vk.ValidationFeaturesEXT{
+        .enabled_validation_feature_count = vulkan.enabled_validation_features.len,
+        .p_enabled_validation_features = &vulkan.enabled_validation_features,
+        .disabled_validation_feature_count = vulkan.disabled_validation_features.len,
+        .p_disabled_validation_features = &vulkan.disabled_validation_features,
     };
 
-    const instance_handle = try self.vkb.createInstance(&instance_create_info, null);
-    const vki = try InstanceDispatch.load(instance_handle, self.vkb.dispatch.vkGetInstanceProcAddr);
-    self.instance = Instance.init(instance_handle, vki);
+    const instance_create_info: vk.InstanceCreateInfo = .{
+        .p_next = &validation_features,
+        .flags = .{ .enumerate_portability_bit_khr = (builtin.os.tag == .macos) },
+        .p_application_info = &vulkan.app_info,
+        .enabled_layer_count = vulkan.validation_layers_req.len,
+        .pp_enabled_layer_names = &vulkan.validation_layers_req,
+        .enabled_extension_count = @intCast(enabled_instance_exts.items.len),
+        .pp_enabled_extension_names = enabled_instance_exts.items.ptr,
+    };
+
+    const instance_handle = try vkb.createInstance(&instance_create_info, null);
+    const vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
+    return Instance.init(instance_handle, vki);
 }
 
-fn pickPhysicalDevice(
-    self: *Self,
-    allocator: Allocator,
-) !void {
-    var physical_device_count: u32 = undefined;
-    if (try self.instance.enumeratePhysicalDevices(&physical_device_count, null) != vk.Result.success) {
-        return error.PhysicalDeviceEnumerationFailed;
-    }
-    if (physical_device_count == 0) {
-        return error.ZeroPhysicalDevicesFound;
-    }
-    const physical_devices = try allocator.alloc(vk.PhysicalDevice, physical_device_count);
+fn pickPhysicalDevice(allocator: Allocator, instance: Instance) !struct { vk.PhysicalDevice, vk.PhysicalDeviceProperties } {
+    const physical_devices = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(physical_devices);
-    if (try self.instance.enumeratePhysicalDevices(&physical_device_count, physical_devices.ptr) != vk.Result.success) {
-        return error.PhysicalDeviceEnumerationFailed;
-    }
-
-    self.physical_device = physical_devices[0];
-    self.physical_device_properties = self.instance.getPhysicalDeviceProperties(self.physical_device);
-    if (self.physical_device_properties.api_version < app_info.api_version) {
+    const phys_device = physical_devices[0];
+    const properties = instance.getPhysicalDeviceProperties(phys_device);
+    if (properties.api_version < vulkan.app_info.api_version) {
         return error.InsufficientDeviceVersion;
     }
+
+    return .{ phys_device, properties };
 }
 
 fn pickQueueFamily(
-    self: *Self,
     allocator: Allocator,
-) !void {
-    var queue_family_count: u32 = undefined;
-    self.instance.getPhysicalDeviceQueueFamilyProperties(self.physical_device, &queue_family_count, null);
-    if (queue_family_count == 0) {
-        return error.ZeroQueueFamiliesFound;
-    }
-    const queue_family_properties = try allocator.alloc(vk.QueueFamilyProperties, queue_family_count);
-    defer allocator.free(queue_family_properties);
-    self.instance.getPhysicalDeviceQueueFamilyProperties(self.physical_device, &queue_family_count, queue_family_properties.ptr);
-    for (queue_family_properties, 0..) |properties, i| {
+    instance: Instance,
+    physical_device: vk.PhysicalDevice,
+    surface: vk.SurfaceKHR,
+) !struct { u32, vk.QueueFamilyProperties } {
+    const device_queue_family_properties = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, allocator);
+    defer allocator.free(device_queue_family_properties);
+    for (device_queue_family_properties, 0..) |properties, i| {
         if (!properties.queue_flags.graphics_bit) {
             continue;
         }
         const index: u32 = @intCast(i);
-        if (try self.instance.getPhysicalDeviceSurfaceSupportKHR(self.physical_device, index, self.surface) == vk.FALSE) {
+        if (try instance.getPhysicalDeviceSurfaceSupportKHR(physical_device, index, surface) == vk.FALSE) {
             continue;
         }
-        self.queue_family_properties = properties;
-        self.queue_family_index = index;
-        break;
+        return .{ index, properties };
     } else {
         return error.NoSuitableQueueFamily;
     }
 }
 
 fn initDevice(
-    self: *Self,
-    allocator: Allocator,
-) !void {
-    try self.pickPhysicalDevice(allocator);
-    try self.pickQueueFamily(allocator);
-
+    instance: Instance,
+    physical_device: vk.PhysicalDevice,
+    queue_family_index: u32,
+) !Device {
     const device_create_info: vk.DeviceCreateInfo = .{
         .queue_create_info_count = 1,
         .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
             .{
                 .p_queue_priorities = &.{1.0},
                 .queue_count = 1,
-                .queue_family_index = self.queue_family_index,
+                .queue_family_index = queue_family_index,
             },
         },
-        .enabled_layer_count = validation_layers.len,
-        .pp_enabled_layer_names = &validation_layers,
-        .enabled_extension_count = device_extensions.len,
-        .pp_enabled_extension_names = &device_extensions,
+        .enabled_layer_count = vulkan.validation_layers_req.len,
+        .pp_enabled_layer_names = &vulkan.validation_layers_req,
+        .enabled_extension_count = vulkan.device_exts_req.len,
+        .pp_enabled_extension_names = &vulkan.device_exts_req,
         .p_enabled_features = &.{},
     };
 
-    const device_handle = try self.instance.createDevice(self.physical_device, &device_create_info, null);
-    const vkd = try DeviceDispatch.load(device_handle, self.instance.wrapper.dispatch.vkGetDeviceProcAddr);
-    self.device = Device.init(device_handle, vkd);
+    const device_handle = try instance.createDevice(physical_device, &device_create_info, null);
+    const vkd = try DeviceDispatch.load(device_handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
+    return Device.init(device_handle, vkd);
 }

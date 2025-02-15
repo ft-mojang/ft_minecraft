@@ -3,11 +3,10 @@ const std = @import("std");
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
-const vulkan = @import("vulkan/vulkan.zig");
+const vulkan = @import("vulkan.zig");
 const VulkanContext = vulkan.Context;
 const Swapchain = vulkan.Swapchain;
-
-const VulkanAllocator = vulkan.Allocator;
+const VulkanAllocator = vulkan.allocator.Allocator;
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -27,6 +26,14 @@ fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
 }
 
 pub fn main() !void {
+    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer _ = general_purpose_allocator.deinit();
+    const gpa = general_purpose_allocator.allocator();
+
+    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
+    defer _ = arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+
     glfw.setErrorCallback(logGLFWError);
 
     if (!glfw.init(.{})) {
@@ -55,13 +62,17 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    var vk_ctx = try VulkanContext.init(std.heap.page_allocator, fn_get_proc_addr, glfw_extensions, window);
+    var vk_ctx = try VulkanContext.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
+<<<<<<< HEAD
     var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
     defer vk_swpchain.deinit(vk_ctx);
 
     var vk_allocator = VulkanAllocator.init(std.heap.page_allocator, &vk_ctx);
+=======
+    var vk_allocator = VulkanAllocator.init(arena, vk_ctx);
+>>>>>>> main
     defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;

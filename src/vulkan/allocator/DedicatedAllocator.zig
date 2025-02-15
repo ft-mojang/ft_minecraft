@@ -1,8 +1,8 @@
 /// Dedicated memory allocator.
 const std = @import("std");
 const vk = @import("vulkan");
-const vka = @import("allocator.zig");
-const vulkan = @import("../vulkan.zig");
+const vulkan = @import("../../vulkan.zig");
+const vka = vulkan.allocator;
 
 const debug = std.debug;
 const mem = std.mem;
@@ -31,12 +31,12 @@ const Transaction = struct {
 };
 
 allocator: mem.Allocator,
-context: *const vulkan.Context,
+context: vulkan.Context,
 allocations: ArrayListUnmanaged(Allocation) = ArrayListUnmanaged(Allocation).empty,
 freed_indices: ArrayListUnmanaged(AllocationIndex) = ArrayListUnmanaged(AllocationIndex).empty,
 next_index: AllocationIndex = @enumFromInt(0),
 
-pub fn init(allocator: mem.Allocator, context: *const vulkan.Context) Self {
+pub fn init(allocator: mem.Allocator, context: vulkan.Context) Self {
     return Self{
         .allocator = allocator,
         .context = context,
@@ -55,7 +55,7 @@ pub fn allocate(
 ) !AllocationIndex {
     const transaction = self.beginTransaction();
 
-    const memory_type = try self.context.findMemoryType(requirements.memory_type_bits, property_flags);
+    const memory_type = try vulkan.findMemoryType(requirements.memory_type_bits, property_flags);
 
     const allocate_info = vk.MemoryAllocateInfo{
         .allocation_size = requirements.size,
