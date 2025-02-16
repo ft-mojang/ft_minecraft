@@ -1,10 +1,12 @@
 const std = @import("std");
+const log = std.log.scoped(.vulkan);
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
 const vulkan = @import("../vulkan.zig");
 const VulkanContext = vulkan.Context;
+const Device = vulkan.Device;
 
 const Self = @This();
 
@@ -18,74 +20,25 @@ const preferred_surface_format = vk.SurfaceFormatKHR{
     .color_space = .srgb_nonlinear_khr,
 };
 
-// TODO when dynamic rendering has to hold attachmentinfos
-const FrameInfo = struct {
-    image: vk.Image,
-    view: vk.ImageView,
+const max_frames_in_flight: u32 = 2;
+
+const Frame = struct {
+    in_flight: vk.Fence,
     image_acquired: vk.Semaphore,
     render_finished: vk.Semaphore,
-    frame_fence: vk.Fence,
-
-    fn init(
-        self: *FrameInfo,
-        context: VulkanContext,
-        image: vk.Image,
-        format: vk.Format,
-    ) !FrameInfo {
-        self.view = try context.device.createImageView(&.{
-            .image = image,
-            .view_type = .@"2d",
-            .format = format,
-            .components = .{ .r = .identity, .g = .identity, .b = .identity, .a = .identity },
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = 1,
-            },
-        }, null);
-        errdefer context.device.destroyImageView(self.view, null);
-
-        self.image = image;
-
-        self.image_acquired = try context.device.createSemaphore(&.{}, null);
-        errdefer context.device.destroySemaphore(self.image_acquired, null);
-
-        self.render_finished = try context.device.createSemaphore(&.{}, null);
-        errdefer context.device.destroySemaphore(self.render_finished, null);
-
-        self.frame_fence = try context.device.createFence(
-            &.{
-                .flags = .{ .signaled_bit = true },
-            },
-            null,
-        );
-        errdefer context.device.destroyFence(self.frame_fence, null);
-
-        return self.*;
-    }
-
-    fn deinit(self: FrameInfo, context: VulkanContext) void {
-        _ = context.device.waitForFences(
-            1,
-            @ptrCast(&self.frame_fence),
-            vk.TRUE,
-            std.math.maxInt(u64),
-        ) catch return;
-        context.device.destroyImageView(self.view, null);
-        context.device.destroySemaphore(self.image_acquired, null);
-        context.device.destroySemaphore(self.render_finished, null);
-        context.device.destroyFence(self.frame_fence, null);
-    }
+    command_buffer: vk.CommandBuffer,
 };
 
+command_pool: vk.CommandPool,
 surface_format: vk.SurfaceFormatKHR,
 present_mode: vk.PresentModeKHR,
 extent: vk.Extent2D,
 handle: vk.SwapchainKHR,
-swap_images: []FrameInfo,
 image_index: u32,
+frame_index: u32,
+images: []vk.Image,
+views: []vk.ImageView,
+frames: []Frame,
 
 pub fn init(
     allocator: Allocator,
@@ -149,45 +102,68 @@ pub fn init(
     }, null);
     errdefer context.device.destroySwapchainKHR(self.handle, null);
 
-    const images = try context.device.getSwapchainImagesAllocKHR(
+    self.images = try context.device.getSwapchainImagesAllocKHR(
         self.handle,
         allocator,
     );
+    errdefer allocator.free(self.images);
 
-    self.swap_images = try allocator.alloc(FrameInfo, images.len);
-    errdefer {
-        for (self.swap_images[0..images.len]) |si|
-            si.deinit(context);
-        allocator.free(self.swap_images);
-    }
+    self.views = try vulkan.createImageViewsForImages(
+        allocator,
+        context.device,
+        .{
+            .image = vk.Image.null_handle,
+            .view_type = .@"2d",
+            .format = self.surface_format.format,
+            .components = .{ .r = .identity, .g = .identity, .b = .identity, .a = .identity },
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        },
+        self.images,
+    );
+    errdefer vulkan.destroyImageViews(allocator, context.device, self.views);
 
-    for (0..image_count) |index| {
-        self.swap_images[index] = try self.swap_images[index].init(
-            context,
-            images[index],
-            self.surface_format.format,
-        );
-    }
-    self.image_index = 0;
+    self.frame_index = 0;
+
+    self.command_pool = try context.device.createCommandPool(
+        &.{
+            .flags = .{ .reset_command_buffer_bit = true },
+            .queue_family_index = context.queue_family_index,
+        },
+        null,
+    );
+    errdefer context.device.destroyCommandPool(self.command_pool, null);
+
+    self.frames = try createFrames(allocator, context.device, self.command_pool, max_frames_in_flight);
+
     return self;
 }
 
-pub fn deinit(self: Self, context: VulkanContext) void {
-    for (self.swap_images[0..self.swap_images.len]) |si|
-        si.deinit(context);
-    context.device.destroySwapchainKHR(self.handle, null);
+pub fn deinit(self: Self, allocator: Allocator, device: Device) void {
+    device.destroyCommandPool(self.command_pool, null);
+    destroyFrames(allocator, device, self.frames);
+    vulkan.destroyImageViews(allocator, device, self.views);
+    allocator.free(self.images);
+    device.destroySwapchainKHR(self.handle, null);
 }
 
-// double buffered, could be made to sync 3 frames
-pub fn presentNextFrame(self: *Self, context: VulkanContext, cmdbuf: vk.CommandBuffer) !void {
-    const current = self.swap_images[self.image_index];
+pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
+    self.frame_index = self.frame_index + 1 % max_frames_in_flight;
+    const current = self.frames[self.frame_index];
+
     _ = context.device.waitForFences(
         1,
-        @ptrCast(&current.frame_fence),
+        @ptrCast(&current.in_flight),
         vk.TRUE,
         std.math.maxInt(u64),
-    ) catch return;
-    try context.device.resetFences(1, @ptrCast(&current.frame_fence));
+    ) catch return error.dafuq; // FIXME:
+
+    try context.device.resetFences(1, @ptrCast(&current.in_flight));
 
     const result = try context.device.acquireNextImageKHR(
         self.handle,
@@ -195,29 +171,96 @@ pub fn presentNextFrame(self: *Self, context: VulkanContext, cmdbuf: vk.CommandB
         current.image_acquired,
         .null_handle,
     );
+
     self.image_index = result.image_index;
 
-    const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
-    // TODO this has to go to the render function
+    return current;
+}
 
-    try context.queue.submit(1, &[_]vk.SubmitInfo{.{
-        .wait_semaphore_count = 1,
-        .p_wait_semaphores = @ptrCast(&current.image_acquired),
-        .p_wait_dst_stage_mask = &wait_stage,
-        .command_buffer_count = 1,
-        .p_command_buffers = @ptrCast(&cmdbuf),
-        .signal_semaphore_count = 1,
-        .p_signal_semaphores = @ptrCast(&current.render_finished),
-    }}, current.frame_fence);
+pub fn submitAndPresentAcquiredFrame(self: *Self, context: vulkan.Context) !void {
+    const current = self.frames[self.frame_index];
 
-    //_ = cmdbuf;
+    try context.queue.submit(
+        1,
+        &[_]vk.SubmitInfo{.{
+            .wait_semaphore_count = 1,
+            .p_wait_semaphores = @ptrCast(&current.image_acquired),
+            .p_wait_dst_stage_mask = &.{
+                .{ .top_of_pipe_bit = true },
+            },
+            .command_buffer_count = 1,
+            .p_command_buffers = @ptrCast(&current.command_buffer),
+            .signal_semaphore_count = 1,
+            .p_signal_semaphores = @ptrCast(&current.render_finished),
+        }},
+        current.in_flight,
+    );
 
     // present current context
-    _ = try context.device.queuePresentKHR(context.queue.handle, &.{
-        .wait_semaphore_count = 1,
-        .p_wait_semaphores = @ptrCast(&current.render_finished),
-        .swapchain_count = 1,
-        .p_swapchains = @ptrCast(&self.handle),
-        .p_image_indices = @ptrCast(&self.image_index),
-    });
+    _ = try context.device.queuePresentKHR(
+        context.queue.handle,
+        &.{
+            .wait_semaphore_count = 1,
+            .p_wait_semaphores = @ptrCast(&current.render_finished),
+            .swapchain_count = 1,
+            .p_swapchains = @ptrCast(&self.handle),
+            .p_image_indices = @ptrCast(&self.image_index),
+        },
+    );
+}
+
+fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPool, count: u32) ![]Frame {
+    const command_buffers = try allocator.alloc(vk.CommandBuffer, count);
+    defer allocator.free(command_buffers);
+    try device.allocateCommandBuffers(
+        &.{
+            .command_pool = command_pool,
+            .level = .primary,
+            .command_buffer_count = count,
+        },
+        command_buffers.ptr,
+    );
+
+    const frames = try allocator.alloc(Frame, count);
+    var ok = true;
+
+    for (frames, command_buffers) |*frame, command_buffer| {
+        const fence_info = vk.FenceCreateInfo{
+            .flags = .{ .signaled_bit = true },
+        };
+        frame.* = .{
+            .command_buffer = command_buffer,
+            .in_flight = device.createFence(&fence_info, null) catch |e| blk: {
+                ok = false;
+                log.err("failed to create fence: {!}", .{e});
+                break :blk vk.Fence.null_handle;
+            },
+            .image_acquired = device.createSemaphore(&.{}, null) catch |e| blk: {
+                ok = false;
+                log.err("failed to create semaphore: {!}", .{e});
+                break :blk vk.Semaphore.null_handle;
+            },
+            .render_finished = device.createSemaphore(&.{}, null) catch |e| blk: {
+                ok = false;
+                log.err("failed to create semaphore: {!}", .{e});
+                break :blk vk.Semaphore.null_handle;
+            },
+        };
+    }
+
+    if (ok) {
+        return frames;
+    }
+
+    destroyFrames(allocator, device, frames);
+    return error.FailedToCreateFrames;
+}
+
+fn destroyFrames(allocator: Allocator, device: Device, frames: []Frame) void {
+    for (frames) |frame| {
+        device.destroyFence(frame.in_flight, null);
+        device.destroySemaphore(frame.image_acquired, null);
+        device.destroySemaphore(frame.render_finished, null);
+    }
+    allocator.free(frames);
 }

@@ -2,7 +2,7 @@
 const std = @import("std");
 const vk = @import("vulkan");
 const vulkan = @import("../../vulkan.zig");
-const vka = vulkan.allocator;
+const vka = vulkan.vk_allocator;
 
 const debug = std.debug;
 const mem = std.mem;
