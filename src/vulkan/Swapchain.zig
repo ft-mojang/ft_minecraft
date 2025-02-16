@@ -154,7 +154,7 @@ pub fn deinit(self: Self, allocator: Allocator, device: Device) void {
 }
 
 pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
-    self.frame_index = self.frame_index + 1 % max_frames_in_flight;
+    self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
     const current = self.frames[self.frame_index];
 
     const wait_result = try context.device.waitForFences(
