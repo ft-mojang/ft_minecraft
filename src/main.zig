@@ -28,6 +28,10 @@ fn render(
 
     // Draw with:
     _ = frame.command_buffer;
+    try context.device.resetCommandBuffer(frame.command_buffer, .{});
+
+    try context.device.beginCommandBuffer(frame.command_buffer, &.{});
+    try context.device.endCommandBuffer(frame.command_buffer);
 
     try swapchain.submitAndPresentAcquiredFrame(context);
 }
