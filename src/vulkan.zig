@@ -1,5 +1,8 @@
 const builtin = @import("builtin");
 const config = @import("config");
+const std = @import("std");
+const mem = std.mem;
+const log = std.log.scoped(.vulkan);
 
 const vk = @import("vulkan");
 pub const BaseDispatch = vk.BaseWrapper(apis);
@@ -10,7 +13,9 @@ pub const Device = vk.DeviceProxy(apis);
 pub const Queue = vk.QueueProxy(apis);
 
 pub const Context = @import("vulkan/Context.zig");
-pub const allocator = @import("vulkan/allocator.zig");
+pub const vk_allocator = @import("vulkan/allocator.zig");
+pub const Allocator = vk_allocator.Allocator;
+pub const Swapchain = @import("vulkan/Swapchain.zig");
 
 pub const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,
@@ -87,4 +92,41 @@ pub fn findMemoryType(
     }
 
     return error.MemoryTypeNotFound;
+}
+
+/// Safely create a vk.ImageView slice with same same base info for a slice of vk.Images.
+/// Use `destroyImageViews` to destroy.
+pub fn createImageViewsForImages(
+    allocator: mem.Allocator,
+    device: Device,
+    create_info: vk.ImageViewCreateInfo,
+    images: []const vk.Image,
+) ![]vk.ImageView {
+    const views = try allocator.alloc(vk.ImageView, images.len);
+    var _create_info = create_info;
+    var ok = true;
+
+    for (views, images) |*view, image| {
+        _create_info.image = image;
+        view.* = device.createImageView(&_create_info, null) catch |e| blk: {
+            ok = false;
+            log.err("failed to create image view: {!}", .{e});
+            break :blk vk.ImageView.null_handle;
+        };
+    }
+
+    if (ok) {
+        return views;
+    }
+
+    destroyImageViews(allocator, device, views);
+    return error.FailedToCreateImageViews;
+}
+
+/// Destroys a vk.ImageView slice created with `createImageViewsForImages`.
+pub fn destroyImageViews(allocator: mem.Allocator, device: Device, views: []vk.ImageView) void {
+    for (views) |view| {
+        device.destroyImageView(view, null);
+    }
+    allocator.free(views);
 }

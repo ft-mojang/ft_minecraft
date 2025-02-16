@@ -5,7 +5,7 @@ const glfw = @import("mach-glfw");
 
 const vulkan = @import("vulkan.zig");
 const VulkanContext = vulkan.Context;
-const VulkanAllocator = vulkan.allocator.Allocator;
+const Swapchain = vulkan.Swapchain;
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -16,8 +16,20 @@ fn update(t: f64, dt: f64) void {
     _ = dt;
 }
 
-fn render(interpolation_alpha: f64) void {
+fn render(
+    context: vulkan.Context,
+    swapchain: *Swapchain,
+    interpolation_alpha: f64,
+) !void {
     _ = interpolation_alpha;
+
+    // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
+    const frame = try swapchain.acquireFrame(context);
+
+    // Draw with:
+    _ = frame.command_buffer;
+
+    try swapchain.submitAndPresentAcquiredFrame(context);
 }
 
 fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
@@ -64,7 +76,11 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var vk_allocator = VulkanAllocator.init(arena, vk_ctx);
+    // TODO: this is not really just a swapchain at this point, need to do some refactoring
+    var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
+    defer vk_swpchain.deinit(std.heap.page_allocator, vk_ctx.device);
+
+    var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
     const max_updates_per_loop = 8;
@@ -87,7 +103,8 @@ pub fn main() !void {
             update_count += 1;
         }
 
-        render(accumulated_update_time / fixed_time_step);
+        const alpha = accumulated_update_time / fixed_time_step;
+        try render(vk_ctx, &vk_swpchain, alpha);
 
         prev_time = curr_time;
     }
