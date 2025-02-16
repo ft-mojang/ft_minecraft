@@ -1,5 +1,6 @@
 const std = @import("std");
 const log = std.log.scoped(.vulkan);
+const debug = std.debug;
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
@@ -156,23 +157,24 @@ pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
     self.frame_index = self.frame_index + 1 % max_frames_in_flight;
     const current = self.frames[self.frame_index];
 
-    _ = context.device.waitForFences(
+    const wait_result = try context.device.waitForFences(
         1,
         @ptrCast(&current.in_flight),
         vk.TRUE,
         std.math.maxInt(u64),
-    ) catch return error.dafuq; // FIXME:
+    );
+    debug.assert(wait_result == .success);
 
     try context.device.resetFences(1, @ptrCast(&current.in_flight));
 
-    const result = try context.device.acquireNextImageKHR(
+    const acquire_result = try context.device.acquireNextImageKHR(
         self.handle,
         std.math.maxInt(u64),
         current.image_acquired,
         .null_handle,
     );
-
-    self.image_index = result.image_index;
+    self.image_index = acquire_result.image_index;
+    // TODO: Do we want to handle surface suboptimal?
 
     return current;
 }
@@ -207,6 +209,7 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, context: vulkan.Context) !void
             .p_image_indices = @ptrCast(&self.image_index),
         },
     );
+    // TODO: Handle out of date / suboptimal
 }
 
 fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPool, count: u32) ![]Frame {

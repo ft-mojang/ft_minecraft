@@ -76,6 +76,7 @@ pub fn main() !void {
     var vk_ctx = try VulkanContext.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
+    // TODO: this is not really just a swapchain at this point, need to do some refactoring
     var vk_swpchain = try Swapchain.init(std.heap.page_allocator, vk_ctx);
     defer vk_swpchain.deinit(std.heap.page_allocator, vk_ctx.device);
 
