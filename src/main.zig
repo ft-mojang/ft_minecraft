@@ -112,4 +112,5 @@ pub fn main() !void {
 
         prev_time = curr_time;
     }
+    try vk_ctx.device.deviceWaitIdle();
 }
