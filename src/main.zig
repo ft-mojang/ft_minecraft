@@ -68,7 +68,7 @@ pub fn main() !void {
     var vk_allocator = VulkanAllocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
-    const chunk = worldgen.generateChunk(0, 0);
+    const chunk = worldgen.generateChunk(134217727, 0);
     worldgen.printChunk(chunk);
 
     const max_updates_per_loop = 8;

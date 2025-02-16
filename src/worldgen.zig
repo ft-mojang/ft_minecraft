@@ -29,15 +29,19 @@ pub const Chunk = struct {
     blocks: [volume]Block,
 };
 
+pub const world_height_chunks = 16;
+pub const world_height_blocks = Chunk.size * world_height_chunks;
+
 const noise = fastnoise.Noise(f64){};
 
 pub fn generateChunk(chunk_x: Chunk.Coord, chunk_z: Chunk.Coord) Chunk {
     var chunk: Chunk = undefined;
     for (0..Chunk.size) |x| {
         for (0..Chunk.size) |z| {
-            const block_x: Block.Coord = chunk_x * Chunk.size + @as(i32, @intCast(x));
-            const block_z: Block.Coord = chunk_z * Chunk.size + @as(i32, @intCast(z));
-            const height: u8 = @intFromFloat(noise.genNoise2D(@floatFromInt(block_x), @floatFromInt(block_z)) * Chunk.size);
+            const block_x = @as(Block.Coord, chunk_x) * Chunk.size + @as(Block.Coord, @intCast(x));
+            const block_z = @as(Block.Coord, chunk_z) * Chunk.size + @as(Block.Coord, @intCast(z));
+            const height: Block.Coord = @intFromFloat(noise.genNoise2D(@floatFromInt(block_x), @floatFromInt(block_z)) * world_height_chunks);
+            // TODO(Hans): Figure out how we handle "chunk pillars" when chunks are uniform in size.
             for (0..Chunk.size) |y| {
                 chunk.blocks[(z * Chunk.size + y) * Chunk.size + x] = if (y < height) .stone else .air;
             }
