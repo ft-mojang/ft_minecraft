@@ -165,6 +165,9 @@ fn initDevice(
         .enabled_extension_count = vulkan.device_exts_req.len,
         .pp_enabled_extension_names = &vulkan.device_exts_req,
         .p_enabled_features = &.{},
+        .p_next = &vk.PhysicalDeviceDynamicRenderingFeaturesKHR{
+            .dynamic_rendering = vk.TRUE,
+        },
     };
 
     const device_handle = try instance.createDevice(physical_device, &device_create_info, null);

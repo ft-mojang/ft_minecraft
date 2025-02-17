@@ -40,7 +40,8 @@ jobs:
         run: ./gh-zig/zig fmt --check src
 
       - name: Build ft_minecraft
-        run: ./gh-zig/zig build
+        run: |
+          ./gh-zig/zig build
 
       - name: Run tests
         run: ./gh-zig/zig build test
