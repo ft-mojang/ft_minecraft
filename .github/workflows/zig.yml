@@ -30,8 +30,8 @@ jobs:
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
           sudo apt update
           sudo apt install vulkan-sdk -y
-          sudo apt install glslang-tools -y
           ls $(dirname $(which vulkaninfo))
+          sudo apt install glslang-tools -y
 
       - name: Fetch & unpack zig
         run: |
@@ -42,7 +42,10 @@ jobs:
         run: ./gh-zig/zig fmt --check src
 
       - name: Build ft_minecraft
-        run: ./gh-zig/zig build
+        run: |
+          ls $(dirname $(which vulkaninfo))
+          echo $PATH
+          ./gh-zig/zig build
 
       - name: Run tests
         run: ./gh-zig/zig build test
