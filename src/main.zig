@@ -21,7 +21,6 @@ fn render(
     swapchain: *Swapchain,
     interpolation_alpha: f64,
 ) !void {
-    _ = interpolation_alpha;
 
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try swapchain.acquireFrame(context);
@@ -31,6 +30,55 @@ fn render(
     try context.device.resetCommandBuffer(frame.command_buffer, .{});
 
     try context.device.beginCommandBuffer(frame.command_buffer, &.{});
+
+    vulkan.cmdTransitionImageLayout(.{
+        .device = context.device,
+        .command_buffer = frame.command_buffer,
+        .image = frame.image,
+        .old_layout = .undefined,
+        .new_layout = .present_src_khr,
+    });
+
+    const beginRendering: vk.PfnCmdBeginRenderingKHR = @ptrCast(context.vkb.getInstanceProcAddr(
+        context.instance.handle,
+        "vkCmdBeginRenderingKHR",
+    )); // FIXME: Handle potential nulls
+
+    const endRendering: vk.PfnCmdEndRenderingKHR = @ptrCast(context.vkb.getInstanceProcAddr(
+        context.instance.handle,
+        "vkCmdEndRenderingKHR",
+    )); // FIXME: Handle potential nulls
+
+    _ = interpolation_alpha;
+
+    beginRendering(
+        frame.command_buffer,
+        &vk.RenderingInfoKHR{
+            .render_area = vk.Rect2D{
+                .extent = swapchain.extent,
+                .offset = vk.Offset2D{ .x = 0, .y = 0 },
+            },
+            .view_mask = 0,
+            .layer_count = 1,
+            //.color_attachment_count = 1,
+            //.p_color_attachments = @alignCast(@ptrCast(&.{
+            //    vk.RenderingAttachmentInfoKHR {
+            //        .image_view = frame.view,
+            //        .image_layout = .present_src_khr,
+            //        .resolve_image_layout = .present_src_khr,
+            //        .resolve_mode = .{},
+            //        .load_op = .clear,
+            //        .store_op = .store,
+            //        .clear_value = vk.ClearValue {
+            //            .color = .{ .float_32 = .{0.0, 0.0, 0.0, 0.0} },
+            //        },
+            //    },
+            //})),
+        },
+    );
+
+    endRendering(frame.command_buffer);
+
     try context.device.endCommandBuffer(frame.command_buffer);
 
     try swapchain.submitAndPresentAcquiredFrame(context);

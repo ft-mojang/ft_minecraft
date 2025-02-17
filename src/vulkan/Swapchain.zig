@@ -28,6 +28,8 @@ const Frame = struct {
     image_acquired: vk.Semaphore,
     render_finished: vk.Semaphore,
     command_buffer: vk.CommandBuffer,
+    image: vk.Image = vk.Image.null_handle,
+    view: vk.ImageView = vk.ImageView.null_handle,
 };
 
 command_pool: vk.CommandPool,
@@ -181,6 +183,9 @@ pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
         .null_handle,
     );
     self.image_index = acquire_result.image_index;
+
+    current.view = self.views[self.image_index];
+    current.image = self.images[self.image_index];
     // TODO: Do we want to handle surface suboptimal?
 
     return current.*;
