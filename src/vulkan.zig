@@ -133,3 +133,75 @@ pub fn destroyImageViews(allocator: mem.Allocator, device: Device, views: []vk.I
     }
     allocator.free(views);
 }
+
+const CmdTransitionImageLayoutOptions = struct {
+    device: Device,
+    command_buffer: vk.CommandBuffer,
+    image: vk.Image,
+    old_layout: vk.ImageLayout,
+    new_layout: vk.ImageLayout,
+};
+
+pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
+    const Transition = struct {
+        src_stage: vk.PipelineStageFlags,
+        dst_stage: vk.PipelineStageFlags,
+        src_access_mask: vk.AccessFlags,
+        dst_access_mask: vk.AccessFlags,
+    };
+
+    // Really scuffed auto formatting
+    // zig fmt: off
+    const transition = if (
+        options.old_layout == vk.ImageLayout.undefined and
+        options.new_layout == vk.ImageLayout.present_src_khr)
+    // zig fmt: on
+    blk: {
+        // FIXME: This is not really a transition you want, just temp
+        break :blk Transition{
+            .src_stage = .{ .top_of_pipe_bit = true },
+            .dst_stage = .{ .fragment_shader_bit = true },
+            .src_access_mask = .{},
+            .dst_access_mask = .{ .shader_read_bit = true },
+        };
+    } else {
+        @panic("layout transition not defined");
+    };
+
+    const barrier = vk.ImageMemoryBarrier{
+        .old_layout = options.old_layout,
+        .new_layout = options.new_layout,
+        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .src_access_mask = transition.src_access_mask,
+        .dst_access_mask = transition.dst_access_mask,
+        .image = options.image,
+        .subresource_range = vk.ImageSubresourceRange{
+            .aspect_mask = .{ .color_bit = true },
+            .base_mip_level = 0,
+            .level_count = 1,
+            .base_array_layer = 0,
+            .layer_count = 1,
+        },
+    };
+
+    const dependency_flags = .{};
+    const memory_barrier_count = 0;
+    const memory_barriers = null;
+    const buffer_memory_barrier_count = 0;
+    const buffer_memory_barriers = null;
+    const image_memory_barrier_count = 1;
+
+    options.device.cmdPipelineBarrier(
+        options.command_buffer,
+        transition.src_stage,
+        transition.dst_stage,
+        dependency_flags,
+        memory_barrier_count,
+        memory_barriers,
+        buffer_memory_barrier_count,
+        buffer_memory_barriers,
+        image_memory_barrier_count,
+        @alignCast(@ptrCast(&barrier)),
+    );
+}
