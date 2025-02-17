@@ -29,6 +29,21 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const vertex_shader_module = b.addModule("shader.vert", .{
+        .root_source_file = compileShader(
+            b,
+            b.path("shaders/shader.vert"),
+            "shader.vert.spv",
+        ),
+    });
+    const fragment_shader_module = b.addModule("shader.frag", .{
+        .root_source_file = compileShader(
+            b,
+            b.path("shaders/shader.frag"),
+            "shader.frag.spv",
+        ),
+    });
+
     // Add options as a moduble importable with @import("config")
     exe.root_module.addOptions("config", options);
     check.root_module.addOptions("config", options);
@@ -60,7 +75,11 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.addImport("vulkan", vk_module);
+    exe.root_module.addImport("shader.vert", vertex_shader_module);
+    exe.root_module.addImport("shader.frag", fragment_shader_module);
     check.root_module.addImport("vulkan", vk_module);
+    check.root_module.addImport("shader.vert", vertex_shader_module);
+    check.root_module.addImport("shader.frag", fragment_shader_module);
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
@@ -102,3 +121,17 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_unit_tests.step);
 }
+
+fn compileShader(
+    b: *std.Build,
+    input_path: std.Build.LazyPath,
+    output_name: []const u8,
+) std.Build.LazyPath {
+    const command = b.addSystemCommand(&.{ "glslangvalidator"});
+    command.addArgs(&.{"--target-env", "vulkan1.2"});
+    command.addArg("-o");
+    const output = command.addOutputFileArg(output_name);
+    command.addFileArg(input_path);
+    return output;
+}
+
