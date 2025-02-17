@@ -1,93 +1,14 @@
-const std = @import("std");
-
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
+const std = @import("std");
+
 const vulkan = @import("vulkan.zig");
-const VulkanContext = vulkan.Context;
-const Renderer = vulkan.Renderer;
 const worldgen = @import("worldgen.zig");
 
 const window_title = "ft_minecraft";
 const window_width = 640;
 const window_height = 480;
-
-fn update(t: f64, dt: f64) void {
-    _ = t;
-    _ = dt;
-}
-
-fn render(
-    context: vulkan.Context,
-    renderer: *Renderer,
-    interpolation_alpha: f64,
-) !void {
-
-    // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
-    const frame = try renderer.acquireFrame(context);
-
-    // Draw with:
-    _ = frame.command_buffer;
-    try context.device.resetCommandBuffer(frame.command_buffer, .{});
-
-    try context.device.beginCommandBuffer(frame.command_buffer, &.{});
-
-    vulkan.cmdTransitionImageLayout(.{
-        .device = context.device,
-        .command_buffer = frame.command_buffer,
-        .image = frame.image,
-        .old_layout = .undefined,
-        .new_layout = .present_src_khr,
-    });
-
-    const beginRendering: vk.PfnCmdBeginRenderingKHR = @ptrCast(context.vkb.getInstanceProcAddr(
-        context.instance.handle,
-        "vkCmdBeginRenderingKHR",
-    )); // FIXME: Handle potential nulls
-
-    const endRendering: vk.PfnCmdEndRenderingKHR = @ptrCast(context.vkb.getInstanceProcAddr(
-        context.instance.handle,
-        "vkCmdEndRenderingKHR",
-    )); // FIXME: Handle potential nulls
-
-    _ = interpolation_alpha;
-
-    beginRendering(
-        frame.command_buffer,
-        &vk.RenderingInfoKHR{
-            .render_area = vk.Rect2D{
-                .extent = renderer.extent,
-                .offset = vk.Offset2D{ .x = 0, .y = 0 },
-            },
-            .view_mask = 0,
-            .layer_count = 1,
-            //.color_attachment_count = 1,
-            //.p_color_attachments = @alignCast(@ptrCast(&.{
-            //    vk.RenderingAttachmentInfoKHR {
-            //        .image_view = frame.view,
-            //        .image_layout = .present_src_khr,
-            //        .resolve_image_layout = .present_src_khr,
-            //        .resolve_mode = .{},
-            //        .load_op = .clear,
-            //        .store_op = .store,
-            //        .clear_value = vk.ClearValue {
-            //            .color = .{ .float_32 = .{0.0, 0.0, 0.0, 0.0} },
-            //        },
-            //    },
-            //})),
-        },
-    );
-
-    endRendering(frame.command_buffer);
-
-    try context.device.endCommandBuffer(frame.command_buffer);
-
-    try renderer.submitAndPresentAcquiredFrame(context);
-}
-
-fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
-    std.log.err("{}: {s}\n", .{ error_code, description });
-}
 
 pub fn main() !void {
     var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}).init;
@@ -126,16 +47,16 @@ pub fn main() !void {
     defer window.destroy();
 
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
-    var vk_ctx = try VulkanContext.init(arena, fn_get_proc_addr, glfw_extensions, window);
+    var vk_ctx = try vulkan.Context.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var renderer = try Renderer.init(std.heap.page_allocator, vk_ctx);
-    defer renderer.deinit(std.heap.page_allocator, vk_ctx.device);
+    var renderer = try vulkan.Renderer.init(arena, vk_ctx);
+    defer renderer.deinit(arena, vk_ctx.device);
 
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
-    const chunk = worldgen.generateChunk(134217727, 0);
+    const chunk = worldgen.generateChunk(0, 0);
     worldgen.printChunk(chunk);
 
     const max_updates_per_loop = 8;
@@ -164,4 +85,81 @@ pub fn main() !void {
         prev_time = curr_time;
     }
     try vk_ctx.device.deviceWaitIdle();
+}
+
+fn update(t: f64, dt: f64) void {
+    _ = t;
+    _ = dt;
+}
+
+fn render(
+    ctx: vulkan.Context,
+    renderer: *vulkan.Renderer,
+    interpolation_alpha: f64,
+) !void {
+
+    // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
+    const frame = try renderer.acquireFrame(ctx);
+
+    // Draw with:
+    _ = frame.command_buffer;
+    try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
+
+    try ctx.device.beginCommandBuffer(frame.command_buffer, &.{});
+
+    vulkan.cmdTransitionImageLayout(.{
+        .device = ctx.device,
+        .command_buffer = frame.command_buffer,
+        .image = frame.image,
+        .old_layout = .undefined,
+        .new_layout = .present_src_khr,
+    });
+
+    const beginRendering: vk.PfnCmdBeginRenderingKHR = @ptrCast(ctx.vkb.getInstanceProcAddr(
+        ctx.instance.handle,
+        "vkCmdBeginRenderingKHR",
+    )); // FIXME: Handle potential nulls
+
+    const endRendering: vk.PfnCmdEndRenderingKHR = @ptrCast(ctx.vkb.getInstanceProcAddr(
+        ctx.instance.handle,
+        "vkCmdEndRenderingKHR",
+    )); // FIXME: Handle potential nulls
+
+    _ = interpolation_alpha;
+
+    beginRendering(
+        frame.command_buffer,
+        &vk.RenderingInfoKHR{
+            .render_area = vk.Rect2D{
+                .extent = renderer.extent,
+                .offset = vk.Offset2D{ .x = 0, .y = 0 },
+            },
+            .view_mask = 0,
+            .layer_count = 1,
+            //.color_attachment_count = 1,
+            //.p_color_attachments = @alignCast(@ptrCast(&.{
+            //    vk.RenderingAttachmentInfoKHR {
+            //        .image_view = frame.view,
+            //        .image_layout = .present_src_khr,
+            //        .resolve_image_layout = .present_src_khr,
+            //        .resolve_mode = .{},
+            //        .load_op = .clear,
+            //        .store_op = .store,
+            //        .clear_value = vk.ClearValue {
+            //            .color = .{ .float_32 = .{0.0, 0.0, 0.0, 0.0} },
+            //        },
+            //    },
+            //})),
+        },
+    );
+
+    endRendering(frame.command_buffer);
+
+    try ctx.device.endCommandBuffer(frame.command_buffer);
+
+    try renderer.submitAndPresentAcquiredFrame(ctx);
+}
+
+fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
+    std.log.err("{}: {s}\n", .{ error_code, description });
 }

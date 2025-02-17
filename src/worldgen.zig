@@ -1,8 +1,7 @@
-const fastnoise = @import("worldgen/fastnoise.zig");
-
 const std = @import("std");
-const math = std.math;
 const debug = std.debug;
+
+const fastnoise = @import("worldgen/fastnoise.zig");
 
 /// Enum variants for all unique block types.
 pub const Block = enum(u8) {

@@ -1,9 +1,3 @@
-const builtin = @import("builtin");
-const config = @import("config");
-const std = @import("std");
-const mem = std.mem;
-const log = std.log.scoped(.vulkan);
-
 const vk = @import("vulkan");
 pub const BaseDispatch = vk.BaseWrapper(apis);
 pub const InstanceDispatch = vk.InstanceWrapper(apis);
@@ -12,10 +6,24 @@ pub const Instance = vk.InstanceProxy(apis);
 pub const Device = vk.DeviceProxy(apis);
 pub const Queue = vk.QueueProxy(apis);
 
-pub const Context = @import("vulkan/Context.zig");
+const std = @import("std");
+const mem = std.mem;
+const log = std.log.scoped(.vulkan);
+const builtin = @import("builtin");
+const config = @import("config");
+
 pub const vk_allocator = @import("vulkan/allocator.zig");
 pub const Allocator = vk_allocator.Allocator;
+pub const Context = @import("vulkan/Context.zig");
 pub const Renderer = @import("vulkan/Renderer.zig");
+
+const CmdTransitionImageLayoutOptions = struct {
+    device: Device,
+    command_buffer: vk.CommandBuffer,
+    image: vk.Image,
+    old_layout: vk.ImageLayout,
+    new_layout: vk.ImageLayout,
+};
 
 pub const app_info: vk.ApplicationInfo = .{
     .api_version = vk.API_VERSION_1_2,
@@ -133,14 +141,6 @@ pub fn destroyImageViews(allocator: mem.Allocator, device: Device, views: []vk.I
     }
     allocator.free(views);
 }
-
-const CmdTransitionImageLayoutOptions = struct {
-    device: Device,
-    command_buffer: vk.CommandBuffer,
-    image: vk.Image,
-    old_layout: vk.ImageLayout,
-    new_layout: vk.ImageLayout,
-};
 
 pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
     const Transition = struct {

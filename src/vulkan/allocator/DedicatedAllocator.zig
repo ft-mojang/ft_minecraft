@@ -1,14 +1,21 @@
 /// Dedicated memory allocator.
-const std = @import("std");
-const vk = @import("vulkan");
-const vulkan = @import("../../vulkan.zig");
-const vka = vulkan.vk_allocator;
+allocator: mem.Allocator,
+ctx: vulkan.Context,
+allocations: ArrayListUnmanaged(Allocation) = ArrayListUnmanaged(Allocation).empty,
+freed_indices: ArrayListUnmanaged(AllocationIndex) = ArrayListUnmanaged(AllocationIndex).empty,
+next_index: AllocationIndex = @enumFromInt(0),
 
+const vk = @import("vulkan");
+
+const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;
-
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
+
+const vulkan = @import("../../vulkan.zig");
+const vka = vulkan.vk_allocator;
 const AllocationIndex = vka.AllocationIndex;
+
 const Self = @This();
 
 pub const Allocation = struct {
@@ -30,16 +37,10 @@ const Transaction = struct {
     };
 };
 
-allocator: mem.Allocator,
-context: vulkan.Context,
-allocations: ArrayListUnmanaged(Allocation) = ArrayListUnmanaged(Allocation).empty,
-freed_indices: ArrayListUnmanaged(AllocationIndex) = ArrayListUnmanaged(AllocationIndex).empty,
-next_index: AllocationIndex = @enumFromInt(0),
-
-pub fn init(allocator: mem.Allocator, context: vulkan.Context) Self {
+pub fn init(allocator: mem.Allocator, ctx: vulkan.Context) Self {
     return Self{
         .allocator = allocator,
-        .context = context,
+        .ctx = ctx,
     };
 }
 
@@ -62,7 +63,7 @@ pub fn allocate(
         .memory_type_index = memory_type,
     };
 
-    const memory = try self.context.device.allocateMemory(&allocate_info, null);
+    const memory = try self.ctx.device.allocateMemory(&allocate_info, null);
 
     const allocation = Allocation{
         .size = requirements.size,
@@ -84,7 +85,7 @@ pub fn free(self: *Self, index: AllocationIndex) void {
 
     debug.assert(allocation.memory != vk.DeviceMemory.null_handle);
 
-    self.context.device.freeMemory(allocation.memory, null);
+    self.ctx.device.freeMemory(allocation.memory, null);
     allocation.* = .{ .size = 0 };
 
     self.freed_indices.append(self.allocator, index) catch {
@@ -96,7 +97,7 @@ pub fn map(self: Self, index: AllocationIndex) !*anyopaque {
     const allocation = self.getAllocationPtr(index);
 
     if (allocation.map_count == 0) {
-        allocation.data = try self.context.device.mapMemory(allocation.memory, 0, vk.WHOLE_SIZE, .{});
+        allocation.data = try self.ctx.device.mapMemory(allocation.memory, 0, vk.WHOLE_SIZE, .{});
     }
 
     allocation.map_count += 1;
@@ -115,7 +116,7 @@ pub fn unmap(self: Self, index: AllocationIndex) void {
     allocation.map_count -= 1;
 
     if (allocation.map_count == 0) {
-        self.context.device.unmapMemory(allocation.memory);
+        self.ctx.device.unmapMemory(allocation.memory);
     }
 }
 

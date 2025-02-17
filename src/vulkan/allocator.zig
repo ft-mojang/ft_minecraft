@@ -1,13 +1,13 @@
 // TODO: Thread safety?
 
-const std = @import("std");
 const vk = @import("vulkan");
-const vulkan = @import("../vulkan.zig");
 
-const DedicatedAllocator = @import("allocator/DedicatedAllocator.zig");
-
+const std = @import("std");
 const mem = std.mem;
 const debug = std.debug;
+
+const vulkan = @import("../vulkan.zig");
+const DedicatedAllocator = @import("allocator/DedicatedAllocator.zig");
 
 /// An index to an allocation.
 pub const AllocationIndex = enum(u31) {
@@ -46,17 +46,17 @@ const AllocationKind = enum(u1) {
 /// Vulkan allocator.
 pub const Allocator = struct {
     allocator: mem.Allocator,
-    context: vulkan.Context,
+    ctx: vulkan.Context,
     dedicated: DedicatedAllocator,
     // TODO: Pooled allocator
 
     const Self = @This();
 
-    pub fn init(allocator: mem.Allocator, context: vulkan.Context) Self {
+    pub fn init(allocator: mem.Allocator, ctx: vulkan.Context) Self {
         return Self{
             .allocator = allocator,
-            .context = context,
-            .dedicated = DedicatedAllocator.init(allocator, context),
+            .ctx = ctx,
+            .dedicated = DedicatedAllocator.init(allocator, ctx),
         };
     }
 
@@ -70,16 +70,16 @@ pub const Allocator = struct {
         buffer_info: vk.BufferCreateInfo,
         memory_property_flags: vk.MemoryPropertyFlags,
     ) !Buffer {
-        const buffer = try self.context.device.createBuffer(&buffer_info, null);
-        errdefer self.context.device.destroyBuffer(buffer, null);
+        const buffer = try self.ctx.device.createBuffer(&buffer_info, null);
+        errdefer self.ctx.device.destroyBuffer(buffer, null);
 
-        const memory_requirements = self.context.device.getBufferMemoryRequirements(buffer);
+        const memory_requirements = self.ctx.device.getBufferMemoryRequirements(buffer);
 
         const allocation = try self.allocate(memory_requirements, memory_property_flags);
         errdefer self.free(allocation);
 
         const memory = self.getMemory(allocation);
-        try self.context.device.bindBufferMemory(buffer, memory, 0);
+        try self.ctx.device.bindBufferMemory(buffer, memory, 0);
 
         return .{
             .vk_handle = buffer,
@@ -89,7 +89,7 @@ pub const Allocator = struct {
 
     /// Destroys a buffer created with `Allocator.createBuffer`.
     pub fn destroyBuffer(self: *Self, buffer: Buffer) void {
-        self.context.device.destroyBuffer(buffer.vk_handle, null);
+        self.ctx.device.destroyBuffer(buffer.vk_handle, null);
         self.free(buffer.allocation);
     }
 
@@ -99,16 +99,16 @@ pub const Allocator = struct {
         image_info: vk.ImageCreateInfo,
         memory_propery_flags: vk.MemoryPropertyFlags,
     ) !Image {
-        const image = try self.context.device.createImage(&image_info, null);
-        errdefer self.context.device.destroyImage(image, null);
+        const image = try self.ctx.device.createImage(&image_info, null);
+        errdefer self.ctx.device.destroyImage(image, null);
 
-        const memory_requirements = self.context.device.getImageMemoryRequirements(image);
+        const memory_requirements = self.ctx.device.getImageMemoryRequirements(image);
 
         const allocation = try self.allocate(memory_requirements, memory_propery_flags);
         errdefer self.free(allocation);
 
         const memory = self.getMemory(allocation);
-        try self.context.device.bindImageMemory(image, memory, 0);
+        try self.ctx.device.bindImageMemory(image, memory, 0);
 
         return .{
             .vk_handle = image,
@@ -118,7 +118,7 @@ pub const Allocator = struct {
 
     /// Destroys an image created with `Allocator.createImage`.
     pub fn destroyImage(self: *Self, image: Image) void {
-        self.context.device.destroyImage(image.vk_handle, null);
+        self.ctx.device.destroyImage(image.vk_handle, null);
         self.free(image.allocation);
     }
 

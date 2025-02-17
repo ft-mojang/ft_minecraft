@@ -1,12 +1,26 @@
+command_pool: vk.CommandPool,
+surface_format: vk.SurfaceFormatKHR,
+present_mode: vk.PresentModeKHR,
+extent: vk.Extent2D,
+swapchain: vk.SwapchainKHR,
+image_index: u32,
+frame_index: u32,
+images: []vk.Image,
+views: []vk.ImageView,
+frames: []Frame,
+pipeline_layout: vk.PipelineLayout,
+pipeline: vk.Pipeline,
+
+const vk = @import("vulkan");
+
 const std = @import("std");
 const log = std.log.scoped(.vulkan);
 const debug = std.debug;
-const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
+const builtin = @import("builtin");
 
-const vk = @import("vulkan");
 const vulkan = @import("../vulkan.zig");
-const VulkanContext = vulkan.Context;
+const Context = vulkan.Context;
 const Device = vulkan.Device;
 
 const Self = @This();
@@ -32,34 +46,21 @@ const Frame = struct {
     view: vk.ImageView = vk.ImageView.null_handle,
 };
 
-command_pool: vk.CommandPool,
-surface_format: vk.SurfaceFormatKHR,
-present_mode: vk.PresentModeKHR,
-extent: vk.Extent2D,
-swapchain: vk.SwapchainKHR,
-image_index: u32,
-frame_index: u32,
-images: []vk.Image,
-views: []vk.ImageView,
-frames: []Frame,
-pipeline_layout: vk.PipelineLayout,
-pipeline: vk.Pipeline,
-
 pub fn init(
     allocator: Allocator,
-    context: VulkanContext,
+    ctx: Context,
 ) !Self {
     var self: Self = undefined;
-    const capabilities = try context.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
-        context.physical_device,
-        context.surface,
+    const capabilities = try ctx.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
+        ctx.physical_device,
+        ctx.surface,
     );
     if (capabilities.current_extent.width == 0 or capabilities.current_extent.height == 0)
         return error.SurfaceLostKHR;
     self.extent = capabilities.current_extent;
-    const surface_formats = try context.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(
-        context.physical_device,
-        context.surface,
+    const surface_formats = try ctx.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(
+        ctx.physical_device,
+        ctx.surface,
         allocator,
     );
     defer allocator.free(surface_formats);
@@ -71,9 +72,9 @@ pub fn init(
         }
     } else self.surface_format = surface_formats[0]; // There must always be at least one supported surface format
 
-    const present_modes = try context.instance.getPhysicalDeviceSurfacePresentModesAllocKHR(
-        context.physical_device,
-        context.surface,
+    const present_modes = try ctx.instance.getPhysicalDeviceSurfacePresentModesAllocKHR(
+        ctx.physical_device,
+        ctx.surface,
         allocator,
     );
     defer allocator.free(present_modes);
@@ -90,8 +91,8 @@ pub fn init(
         image_count = @min(image_count, capabilities.max_image_count);
     }
 
-    self.swapchain = try context.device.createSwapchainKHR(&.{
-        .surface = context.surface,
+    self.swapchain = try ctx.device.createSwapchainKHR(&.{
+        .surface = ctx.surface,
         .min_image_count = image_count,
         .image_format = self.surface_format.format,
         .image_color_space = self.surface_format.color_space,
@@ -100,15 +101,15 @@ pub fn init(
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
         .image_sharing_mode = .exclusive,
         .queue_family_index_count = 1,
-        .p_queue_family_indices = &.{context.queue_family_index},
+        .p_queue_family_indices = &.{ctx.queue_family_index},
         .pre_transform = capabilities.current_transform,
         .composite_alpha = .{ .opaque_bit_khr = true },
         .present_mode = self.present_mode,
         .clipped = vk.TRUE,
     }, null);
-    errdefer context.device.destroySwapchainKHR(self.swapchain, null);
+    errdefer ctx.device.destroySwapchainKHR(self.swapchain, null);
 
-    self.images = try context.device.getSwapchainImagesAllocKHR(
+    self.images = try ctx.device.getSwapchainImagesAllocKHR(
         self.swapchain,
         allocator,
     );
@@ -116,7 +117,7 @@ pub fn init(
 
     self.views = try vulkan.createImageViewsForImages(
         allocator,
-        context.device,
+        ctx.device,
         .{
             .image = vk.Image.null_handle,
             .view_type = .@"2d",
@@ -132,23 +133,23 @@ pub fn init(
         },
         self.images,
     );
-    errdefer vulkan.destroyImageViews(allocator, context.device, self.views);
+    errdefer vulkan.destroyImageViews(allocator, ctx.device, self.views);
 
     self.frame_index = 0;
 
-    self.command_pool = try context.device.createCommandPool(
+    self.command_pool = try ctx.device.createCommandPool(
         &.{
             .flags = .{ .reset_command_buffer_bit = true },
-            .queue_family_index = context.queue_family_index,
+            .queue_family_index = ctx.queue_family_index,
         },
         null,
     );
-    errdefer context.device.destroyCommandPool(self.command_pool, null);
+    errdefer ctx.device.destroyCommandPool(self.command_pool, null);
 
-    self.frames = try createFrames(allocator, context.device, self.command_pool, max_frames_in_flight);
+    self.frames = try createFrames(allocator, ctx.device, self.command_pool, max_frames_in_flight);
 
-    self.pipeline_layout, self.pipeline = try createPipeline(context.device);
-    errdefer destroyPipeline(context.device, self.pipeline_layout, self.pipeline);
+    self.pipeline_layout, self.pipeline = try createPipeline(ctx.device);
+    errdefer destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
 
     return self;
 }
@@ -162,11 +163,11 @@ pub fn deinit(self: Self, allocator: Allocator, device: Device) void {
     device.destroySwapchainKHR(self.swapchain, null);
 }
 
-pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
+pub fn acquireFrame(self: *Self, ctx: vulkan.Context) !Frame {
     self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
     const current = &self.frames[self.frame_index];
 
-    const wait_result = try context.device.waitForFences(
+    const wait_result = try ctx.device.waitForFences(
         1,
         @ptrCast(&current.in_flight),
         vk.TRUE,
@@ -174,9 +175,9 @@ pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
     );
     debug.assert(wait_result == .success);
 
-    try context.device.resetFences(1, @ptrCast(&current.in_flight));
+    try ctx.device.resetFences(1, @ptrCast(&current.in_flight));
 
-    const acquire_result = try context.device.acquireNextImageKHR(
+    const acquire_result = try ctx.device.acquireNextImageKHR(
         self.swapchain,
         std.math.maxInt(u64),
         current.image_acquired,
@@ -191,10 +192,10 @@ pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
     return current.*;
 }
 
-pub fn submitAndPresentAcquiredFrame(self: *Self, context: vulkan.Context) !void {
+pub fn submitAndPresentAcquiredFrame(self: *Self, ctx: vulkan.Context) !void {
     const current = self.frames[self.frame_index];
 
-    try context.queue.submit(
+    try ctx.queue.submit(
         1,
         &[_]vk.SubmitInfo{.{
             .wait_semaphore_count = 1,
@@ -210,9 +211,9 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, context: vulkan.Context) !void
         current.in_flight,
     );
 
-    // present current context
-    _ = try context.device.queuePresentKHR(
-        context.queue.handle,
+    // present current ctx
+    _ = try ctx.device.queuePresentKHR(
+        ctx.queue.handle,
         &.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&current.render_finished),

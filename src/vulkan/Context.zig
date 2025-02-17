@@ -1,3 +1,14 @@
+allocator: Allocator,
+vkb: BaseDispatch,
+instance: Instance,
+surface: vk.SurfaceKHR,
+physical_device: vk.PhysicalDevice,
+physical_device_properties: vk.PhysicalDeviceProperties,
+device: Device,
+queue_family_index: u32,
+queue_family_properties: vk.QueueFamilyProperties,
+queue: Queue,
+
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 
@@ -17,17 +28,6 @@ const Device = vulkan.Device;
 const Queue = vulkan.Queue;
 
 const Self = @This();
-
-allocator: Allocator,
-vkb: BaseDispatch,
-instance: Instance,
-surface: vk.SurfaceKHR,
-physical_device: vk.PhysicalDevice,
-physical_device_properties: vk.PhysicalDeviceProperties,
-device: Device,
-queue_family_index: u32,
-queue_family_properties: vk.QueueFamilyProperties,
-queue: Queue,
 
 pub fn init(
     allocator: Allocator,
