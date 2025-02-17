@@ -11,20 +11,6 @@ frames: []Frame,
 pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 
-const vk = @import("vulkan");
-
-const std = @import("std");
-const log = std.log.scoped(.vulkan);
-const debug = std.debug;
-const Allocator = std.mem.Allocator;
-const builtin = @import("builtin");
-
-const vulkan = @import("../vulkan.zig");
-const Context = vulkan.Context;
-const Device = vulkan.Device;
-
-const Self = @This();
-
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
     .mailbox_khr,
@@ -36,15 +22,6 @@ const preferred_surface_format = vk.SurfaceFormatKHR{
 };
 
 const max_frames_in_flight: u32 = 2;
-
-const Frame = struct {
-    in_flight: vk.Fence,
-    image_acquired: vk.Semaphore,
-    render_finished: vk.Semaphore,
-    command_buffer: vk.CommandBuffer,
-    image: vk.Image = vk.Image.null_handle,
-    view: vk.ImageView = vk.ImageView.null_handle,
-};
 
 pub fn init(
     allocator: Allocator,
@@ -66,7 +43,7 @@ pub fn init(
     defer allocator.free(surface_formats);
 
     for (surface_formats) |sfmt| {
-        if (std.meta.eql(sfmt, preferred_surface_format)) {
+        if (meta.eql(sfmt, preferred_surface_format)) {
             self.surface_format = preferred_surface_format;
             break;
         }
@@ -80,7 +57,7 @@ pub fn init(
     defer allocator.free(present_modes);
 
     for (preferred_present_mode) |pref| {
-        if (std.mem.indexOfScalar(vk.PresentModeKHR, present_modes, pref) != null) {
+        if (mem.indexOfScalar(vk.PresentModeKHR, present_modes, pref) != null) {
             self.present_mode = pref;
             break;
         }
@@ -171,7 +148,7 @@ pub fn acquireFrame(self: *Self, ctx: vulkan.Context) !Frame {
         1,
         @ptrCast(&current.in_flight),
         vk.TRUE,
-        std.math.maxInt(u64),
+        math.maxInt(u64),
     );
     debug.assert(wait_result == .success);
 
@@ -179,7 +156,7 @@ pub fn acquireFrame(self: *Self, ctx: vulkan.Context) !Frame {
 
     const acquire_result = try ctx.device.acquireNextImageKHR(
         self.swapchain,
-        std.math.maxInt(u64),
+        math.maxInt(u64),
         current.image_acquired,
         .null_handle,
     );
@@ -383,3 +360,29 @@ fn destroyFrames(allocator: Allocator, device: Device, frames: []Frame) void {
     }
     allocator.free(frames);
 }
+
+const Self = @This();
+
+const Frame = struct {
+    in_flight: vk.Fence,
+    image_acquired: vk.Semaphore,
+    render_finished: vk.Semaphore,
+    command_buffer: vk.CommandBuffer,
+    image: vk.Image = vk.Image.null_handle,
+    view: vk.ImageView = vk.ImageView.null_handle,
+};
+
+const vulkan = @import("../vulkan.zig");
+const Context = vulkan.Context;
+const Device = vulkan.Device;
+
+const builtin = @import("builtin");
+const std = @import("std");
+const log = std.log.scoped(.vulkan);
+const debug = std.debug;
+const mem = std.mem;
+const math = std.math;
+const meta = std.meta;
+const Allocator = std.mem.Allocator;
+
+const vk = @import("vulkan");

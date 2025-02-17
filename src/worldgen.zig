@@ -1,37 +1,3 @@
-const std = @import("std");
-const debug = std.debug;
-
-const fastnoise = @import("worldgen/fastnoise.zig");
-
-/// Enum variants for all unique block types.
-pub const Block = enum(u8) {
-    air,
-    stone,
-
-    /// Valid range of block coordinates.
-    pub const Coord = i32;
-};
-
-pub const Chunk = struct {
-    blocks: [volume]Block,
-
-    /// Valid range of chunk coordinates.
-    pub const Coord = i28;
-
-    /// Side length of a chunk on the vertical y axis.
-    pub const size_y = 256;
-
-    /// Side length of a chunk on the horizontal x and z axes.
-    pub const size_xz = blk: {
-        const bit_width = @bitSizeOf(Block.Coord) - @bitSizeOf(Coord);
-        debug.assert(bit_width > 0);
-        break :blk bit_width * bit_width;
-    };
-
-    /// The number of blocks in a chunk.
-    pub const volume = size_xz * size_y * size_xz;
-};
-
 const noise = fastnoise.Noise(f64){};
 
 pub fn generateChunk(chunk_x: Chunk.Coord, chunk_z: Chunk.Coord) Chunk {
@@ -62,3 +28,37 @@ pub fn printChunk(chunk: Chunk) void {
         debug.print("----------------\n", .{});
     }
 }
+
+/// Enum variants for all unique block types.
+pub const Block = enum(u8) {
+    air,
+    stone,
+
+    /// Valid range of block coordinates.
+    pub const Coord = i32;
+};
+
+pub const Chunk = struct {
+    blocks: [volume]Block,
+
+    /// Side length of a chunk on the vertical y axis.
+    pub const size_y = 256;
+
+    /// Side length of a chunk on the horizontal x and z axes.
+    pub const size_xz = blk: {
+        const bit_width = @bitSizeOf(Block.Coord) - @bitSizeOf(Coord);
+        debug.assert(bit_width > 0);
+        break :blk bit_width * bit_width;
+    };
+
+    /// The number of blocks in a chunk.
+    pub const volume = size_xz * size_y * size_xz;
+
+    /// Valid range of chunk coordinates.
+    pub const Coord = i28;
+};
+
+const fastnoise = @import("worldgen/fastnoise.zig");
+
+const std = @import("std");
+const debug = std.debug;

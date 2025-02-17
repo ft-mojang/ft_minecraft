@@ -9,26 +9,6 @@ queue_family_index: u32,
 queue_family_properties: vk.QueueFamilyProperties,
 queue: Queue,
 
-const vk = @import("vulkan");
-const glfw = @import("mach-glfw");
-
-const std = @import("std");
-const log = std.log;
-const mem = std.mem;
-const Allocator = mem.Allocator;
-const ArrayList = std.ArrayList;
-const builtin = @import("builtin");
-
-const vulkan = @import("../vulkan.zig");
-const BaseDispatch = vulkan.BaseDispatch;
-const InstanceDispatch = vulkan.InstanceDispatch;
-const DeviceDispatch = vulkan.DeviceDispatch;
-const Instance = vulkan.Instance;
-const Device = vulkan.Device;
-const Queue = vulkan.Queue;
-
-const Self = @This();
-
 pub fn init(
     allocator: Allocator,
     fn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
@@ -174,3 +154,23 @@ fn initDevice(
     const vkd = try DeviceDispatch.load(device_handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
     return Device.init(device_handle, vkd);
 }
+
+const Self = @This();
+
+const vulkan = @import("../vulkan.zig");
+const BaseDispatch = vulkan.BaseDispatch;
+const InstanceDispatch = vulkan.InstanceDispatch;
+const DeviceDispatch = vulkan.DeviceDispatch;
+const Instance = vulkan.Instance;
+const Device = vulkan.Device;
+const Queue = vulkan.Queue;
+
+const builtin = @import("builtin");
+const std = @import("std");
+const log = std.log;
+const mem = std.mem;
+const Allocator = mem.Allocator;
+const ArrayList = std.ArrayList;
+
+const vk = @import("vulkan");
+const glfw = @import("mach-glfw");

@@ -1,48 +1,5 @@
 // TODO: Thread safety?
 
-const vk = @import("vulkan");
-
-const std = @import("std");
-const mem = std.mem;
-const debug = std.debug;
-
-const vulkan = @import("../vulkan.zig");
-const DedicatedAllocator = @import("allocator/DedicatedAllocator.zig");
-
-/// An index to an allocation.
-pub const AllocationIndex = enum(u31) {
-    _,
-
-    const Self = @This();
-
-    pub fn increment(self: *Self) void {
-        self.* = @enumFromInt(@intFromEnum(self.*) + 1);
-    }
-};
-
-/// Handle to an allocation.
-pub const Allocation = struct {
-    index: AllocationIndex,
-    kind: AllocationKind,
-};
-
-/// A buffer handle.
-pub const Buffer = struct {
-    vk_handle: vk.Buffer,
-    allocation: Allocation,
-};
-
-/// An image handle.
-pub const Image = struct {
-    vk_handle: vk.Image,
-    allocation: Allocation,
-};
-
-const AllocationKind = enum(u1) {
-    dedicated,
-    pooled,
-};
-
 /// Vulkan allocator.
 pub const Allocator = struct {
     allocator: mem.Allocator,
@@ -163,3 +120,46 @@ pub const Allocator = struct {
         };
     }
 };
+
+/// An index to an allocation.
+pub const AllocationIndex = enum(u31) {
+    _,
+
+    const Self = @This();
+
+    pub fn increment(self: *Self) void {
+        self.* = @enumFromInt(@intFromEnum(self.*) + 1);
+    }
+};
+
+/// Handle to an allocation.
+pub const Allocation = struct {
+    index: AllocationIndex,
+    kind: AllocationKind,
+};
+
+/// A buffer handle.
+pub const Buffer = struct {
+    vk_handle: vk.Buffer,
+    allocation: Allocation,
+};
+
+/// An image handle.
+pub const Image = struct {
+    vk_handle: vk.Image,
+    allocation: Allocation,
+};
+
+const AllocationKind = enum(u1) {
+    dedicated,
+    pooled,
+};
+
+const vulkan = @import("../vulkan.zig");
+const DedicatedAllocator = @import("allocator/DedicatedAllocator.zig");
+
+const std = @import("std");
+const mem = std.mem;
+const debug = std.debug;
+
+const vk = @import("vulkan");

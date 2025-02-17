@@ -5,38 +5,6 @@ allocations: ArrayListUnmanaged(Allocation) = ArrayListUnmanaged(Allocation).emp
 freed_indices: ArrayListUnmanaged(AllocationIndex) = ArrayListUnmanaged(AllocationIndex).empty,
 next_index: AllocationIndex = @enumFromInt(0),
 
-const vk = @import("vulkan");
-
-const std = @import("std");
-const debug = std.debug;
-const mem = std.mem;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
-
-const vulkan = @import("../../vulkan.zig");
-const vka = vulkan.vk_allocator;
-const AllocationIndex = vka.AllocationIndex;
-
-const Self = @This();
-
-pub const Allocation = struct {
-    size: vk.DeviceSize,
-    memory: vk.DeviceMemory = vk.DeviceMemory.null_handle,
-    map_count: u32 = 0,
-    data: ?*anyopaque = null,
-};
-
-const Transaction = struct {
-    index: AllocationIndex,
-    index_kind: IndexKind,
-
-    const IndexKind = enum {
-        /// Using the next available index.
-        next,
-        /// Using an index from the free list.
-        freed,
-    };
-};
-
 pub fn init(allocator: mem.Allocator, ctx: vulkan.Context) Self {
     return Self{
         .allocator = allocator,
@@ -148,3 +116,35 @@ fn commitTransaction(self: *Self, transaction: Transaction) void {
         .freed => _ = self.freed_indices.pop(),
     }
 }
+
+const Self = @This();
+
+pub const Allocation = struct {
+    size: vk.DeviceSize,
+    memory: vk.DeviceMemory = vk.DeviceMemory.null_handle,
+    map_count: u32 = 0,
+    data: ?*anyopaque = null,
+};
+
+const Transaction = struct {
+    index: AllocationIndex,
+    index_kind: IndexKind,
+
+    const IndexKind = enum {
+        /// Using the next available index.
+        next,
+        /// Using an index from the free list.
+        freed,
+    };
+};
+
+const vulkan = @import("../../vulkan.zig");
+const vka = vulkan.vk_allocator;
+const AllocationIndex = vka.AllocationIndex;
+
+const std = @import("std");
+const debug = std.debug;
+const mem = std.mem;
+const ArrayListUnmanaged = std.ArrayListUnmanaged;
+
+const vk = @import("vulkan");

@@ -1,39 +1,31 @@
-const vk = @import("vulkan");
-const glfw = @import("mach-glfw");
-
-const std = @import("std");
-
-const vulkan = @import("vulkan.zig");
-const worldgen = @import("worldgen.zig");
-
 const window_title = "ft_minecraft";
 const window_width = 640;
 const window_height = 480;
 
 pub fn main() !void {
-    var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}).init;
+    var general_purpose_allocator = heap.GeneralPurposeAllocator(.{}).init;
     defer _ = general_purpose_allocator.deinit();
     const gpa = general_purpose_allocator.allocator();
 
-    var arena_allocator = std.heap.ArenaAllocator.init(gpa);
+    var arena_allocator = heap.ArenaAllocator.init(gpa);
     defer _ = arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
     glfw.setErrorCallback(logGLFWError);
 
     if (!glfw.init(.{})) {
-        std.log.err("failed to initialize GLFW: {?s}", .{glfw.getErrorString()});
+        log.err("failed to initialize GLFW: {?s}", .{glfw.getErrorString()});
         return error.GLFWInitFailed;
     }
     defer glfw.terminate();
 
     if (!glfw.vulkanSupported()) {
-        std.log.err("host does not support Vulkan", .{});
+        log.err("host does not support Vulkan", .{});
         return error.GLFWInitFailed;
     }
 
     const glfw_extensions = glfw.getRequiredInstanceExtensions() orelse {
-        std.log.err("failed to get required vulkan instance extensions: {?s}", .{glfw.getErrorString()});
+        log.err("failed to get required vulkan instance extensions: {?s}", .{glfw.getErrorString()});
         return error.GLFWInitFailed;
     };
 
@@ -41,7 +33,7 @@ pub fn main() !void {
         .client_api = .no_api,
         .resizable = false,
     }) orelse {
-        std.log.err("failed to create GLFW window: {?s}", .{glfw.getErrorString()});
+        log.err("failed to create GLFW window: {?s}", .{glfw.getErrorString()});
         return error.CreateWindowFailed;
     };
     defer window.destroy();
@@ -161,5 +153,15 @@ fn render(
 }
 
 fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
-    std.log.err("{}: {s}\n", .{ error_code, description });
+    log.err("{}: {s}\n", .{ error_code, description });
 }
+
+const vulkan = @import("vulkan.zig");
+const worldgen = @import("worldgen.zig");
+
+const std = @import("std");
+const log = std.log;
+const heap = std.heap;
+
+const vk = @import("vulkan");
+const glfw = @import("mach-glfw");
