@@ -127,7 +127,7 @@ fn compileShader(
     input_path: std.Build.LazyPath,
     output_name: []const u8,
 ) std.Build.LazyPath {
-    const command = b.addSystemCommand(&.{ "glslangvalidator"});
+    const command = b.addSystemCommand(&.{ "glslangValidator"});
     command.addArgs(&.{"--target-env", "vulkan1.2"});
     command.addArg("-o");
     const output = command.addOutputFileArg(output_name);
