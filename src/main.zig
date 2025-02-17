@@ -6,6 +6,7 @@ const glfw = @import("mach-glfw");
 const vulkan = @import("vulkan.zig");
 const VulkanContext = vulkan.Context;
 const Renderer = vulkan.Renderer;
+const worldgen = @import("worldgen.zig");
 
 const window_title = "ft_minecraft";
 const window_width = 640;
@@ -133,6 +134,9 @@ pub fn main() !void {
 
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
+
+    const chunk = worldgen.generateChunk(134217727, 0);
+    worldgen.printChunk(chunk);
 
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
