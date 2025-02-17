@@ -52,6 +52,7 @@ pub fn init(
     );
     if (capabilities.current_extent.width == 0 or capabilities.current_extent.height == 0)
         return error.SurfaceLostKHR;
+    self.extent = capabilities.current_extent;
     const surface_formats = try context.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(
         context.physical_device,
         context.surface,
