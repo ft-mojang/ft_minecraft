@@ -62,6 +62,9 @@ pub const instance_exts_opt = [_][*:0]const u8{
 
 pub const device_exts_req = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
+    vk.extensions.khr_dynamic_rendering.name,
+    // NOTE: Not available in apple aarch64
+    // vk.extensions.ext_vertex_input_dynamic_state.name
 } ++ switch (builtin.os.tag) {
     .macos => [_][*:0]const u8{
         vk.extensions.khr_portability_subset.name,
