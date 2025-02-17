@@ -36,7 +36,7 @@ command_pool: vk.CommandPool,
 surface_format: vk.SurfaceFormatKHR,
 present_mode: vk.PresentModeKHR,
 extent: vk.Extent2D,
-handle: vk.SwapchainKHR,
+swapchain: vk.SwapchainKHR,
 image_index: u32,
 frame_index: u32,
 images: []vk.Image,
@@ -90,7 +90,7 @@ pub fn init(
         image_count = @min(image_count, capabilities.max_image_count);
     }
 
-    self.handle = try context.device.createSwapchainKHR(&.{
+    self.swapchain = try context.device.createSwapchainKHR(&.{
         .surface = context.surface,
         .min_image_count = image_count,
         .image_format = self.surface_format.format,
@@ -106,10 +106,10 @@ pub fn init(
         .present_mode = self.present_mode,
         .clipped = vk.TRUE,
     }, null);
-    errdefer context.device.destroySwapchainKHR(self.handle, null);
+    errdefer context.device.destroySwapchainKHR(self.swapchain, null);
 
     self.images = try context.device.getSwapchainImagesAllocKHR(
-        self.handle,
+        self.swapchain,
         allocator,
     );
     errdefer allocator.free(self.images);
@@ -159,7 +159,7 @@ pub fn deinit(self: Self, allocator: Allocator, device: Device) void {
     device.destroyCommandPool(self.command_pool, null);
     vulkan.destroyImageViews(allocator, device, self.views);
     allocator.free(self.images);
-    device.destroySwapchainKHR(self.handle, null);
+    device.destroySwapchainKHR(self.swapchain, null);
 }
 
 pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
@@ -177,7 +177,7 @@ pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
     try context.device.resetFences(1, @ptrCast(&current.in_flight));
 
     const acquire_result = try context.device.acquireNextImageKHR(
-        self.handle,
+        self.swapchain,
         std.math.maxInt(u64),
         current.image_acquired,
         .null_handle,
@@ -217,7 +217,7 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, context: vulkan.Context) !void
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&current.render_finished),
             .swapchain_count = 1,
-            .p_swapchains = @ptrCast(&self.handle),
+            .p_swapchains = @ptrCast(&self.swapchain),
             .p_image_indices = @ptrCast(&self.image_index),
         },
     );
