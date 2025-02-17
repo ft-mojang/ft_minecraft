@@ -1,3 +1,4 @@
+allocator: Allocator,
 command_pool: vk.CommandPool,
 surface_format: vk.SurfaceFormatKHR,
 present_mode: vk.PresentModeKHR,
@@ -28,6 +29,7 @@ pub fn init(
     ctx: Context,
 ) !Self {
     var self: Self = undefined;
+    self.allocator = allocator;
     const capabilities = try ctx.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
         ctx.physical_device,
         ctx.surface,
@@ -131,13 +133,13 @@ pub fn init(
     return self;
 }
 
-pub fn deinit(self: Self, allocator: Allocator, device: Device) void {
-    destroyPipeline(device, self.pipeline_layout, self.pipeline);
-    destroyFrames(allocator, device, self.frames);
-    device.destroyCommandPool(self.command_pool, null);
-    vulkan.destroyImageViews(allocator, device, self.views);
-    allocator.free(self.images);
-    device.destroySwapchainKHR(self.swapchain, null);
+pub fn deinit(self: Self, ctx: Context) void {
+    destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
+    destroyFrames(self.allocator, ctx.device, self.frames);
+    ctx.device.destroyCommandPool(self.command_pool, null);
+    vulkan.destroyImageViews(self.allocator, ctx.device, self.views);
+    self.allocator.free(self.images);
+    ctx.device.destroySwapchainKHR(self.swapchain, null);
 }
 
 pub fn acquireFrame(self: *Self, ctx: vulkan.Context) !Frame {

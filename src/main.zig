@@ -43,7 +43,7 @@ pub fn main() !void {
     defer vk_ctx.deinit();
 
     var renderer = try vulkan.Renderer.init(arena, vk_ctx);
-    defer renderer.deinit(arena, vk_ctx.device);
+    defer renderer.deinit(vk_ctx);
 
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
