@@ -40,6 +40,8 @@ frame_index: u32,
 images: []vk.Image,
 views: []vk.ImageView,
 frames: []Frame,
+pipeline_layout: vk.PipelineLayout,
+pipeline: vk.Pipeline,
 
 pub fn init(
     allocator: Allocator,
@@ -143,12 +145,16 @@ pub fn init(
 
     self.frames = try createFrames(allocator, context.device, self.command_pool, max_frames_in_flight);
 
+    self.pipeline_layout, self.pipeline = try createPipeline(context.device);
+    errdefer destroyPipeline(context.device, self.pipeline_layout, self.pipeline);
+
     return self;
 }
 
 pub fn deinit(self: Self, allocator: Allocator, device: Device) void {
-    device.destroyCommandPool(self.command_pool, null);
+    destroyPipeline(device, self.pipeline_layout, self.pipeline);
     destroyFrames(allocator, device, self.frames);
+    device.destroyCommandPool(self.command_pool, null);
     vulkan.destroyImageViews(allocator, device, self.views);
     allocator.free(self.images);
     device.destroySwapchainKHR(self.handle, null);
@@ -156,7 +162,7 @@ pub fn deinit(self: Self, allocator: Allocator, device: Device) void {
 
 pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
     self.frame_index = (self.frame_index + 1) % max_frames_in_flight;
-    const current = self.frames[self.frame_index];
+    const current = &self.frames[self.frame_index];
 
     const wait_result = try context.device.waitForFences(
         1,
@@ -177,7 +183,7 @@ pub fn acquireFrame(self: *Self, context: vulkan.Context) !Frame {
     self.image_index = acquire_result.image_index;
     // TODO: Do we want to handle surface suboptimal?
 
-    return current;
+    return current.*;
 }
 
 pub fn submitAndPresentAcquiredFrame(self: *Self, context: vulkan.Context) !void {
@@ -211,6 +217,109 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, context: vulkan.Context) !void
         },
     );
     // TODO: Handle out of date / suboptimal
+}
+
+fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
+    const vertex_shader_code = @embedFile("shader.vert");
+    const vertex_shader = try device.createShaderModule(&vk.ShaderModuleCreateInfo{
+        .p_code = @alignCast(@ptrCast(vertex_shader_code)),
+        .code_size = vertex_shader_code.len,
+    }, null);
+    defer device.destroyShaderModule(vertex_shader, null);
+
+    const fragment_shader_code = @embedFile("shader.frag");
+    const fragment_shader = try device.createShaderModule(&.{
+        .p_code = @alignCast(@ptrCast(fragment_shader_code)),
+        .code_size = fragment_shader_code.len,
+    }, null);
+    defer device.destroyShaderModule(fragment_shader, null);
+
+    const layout = try device.createPipelineLayout(&.{}, null);
+    errdefer device.destroyPipelineLayout(layout, null);
+
+    var pipeline = vk.Pipeline.null_handle;
+    // TODO: Pull out inner structs so wont have to disable formatter here
+    // zig fmt: off
+    const result = try device.createGraphicsPipelines(
+        vk.PipelineCache.null_handle,
+        1, // Create info count,
+        @ptrCast(&vk.GraphicsPipelineCreateInfo{
+            .layout = layout,
+            .p_viewport_state = @ptrCast(&vk.PipelineViewportStateCreateInfo{
+                .viewport_count = 1,
+                .scissor_count = 1,
+            }),
+            .p_dynamic_state = @ptrCast(&vk.PipelineDynamicStateCreateInfo {
+                .dynamic_state_count = 2,
+                .p_dynamic_states = &.{
+                    vk.DynamicState.viewport,
+                    vk.DynamicState.scissor,
+                    vk.DynamicState.vertex_input_ext,
+                },
+            }),
+            .subpass = 0,
+            .base_pipeline_index = 0,
+            .p_vertex_input_state = &vk.PipelineVertexInputStateCreateInfo {
+                .vertex_binding_description_count = 0,
+                .p_vertex_binding_descriptions = null,
+                .vertex_attribute_description_count = 0,
+                .p_vertex_attribute_descriptions = null,
+            },
+            .p_input_assembly_state = &vk.PipelineInputAssemblyStateCreateInfo {
+                .topology = .triangle_list,
+                .primitive_restart_enable = vk.FALSE,
+            },
+            .stage_count = 2,
+            .p_stages = @alignCast(@ptrCast(&.{
+                vk.PipelineShaderStageCreateInfo {
+                    .module = vertex_shader,
+                    .stage = .{ .vertex_bit = true },
+                    .p_name = "main",
+                },
+                vk.PipelineShaderStageCreateInfo {
+                    .module = fragment_shader,
+                    .stage = .{ .fragment_bit = true },
+                    .p_name = "main",
+                },
+            })),
+            .p_multisample_state = &vk.PipelineMultisampleStateCreateInfo {
+                .sample_shading_enable = vk.FALSE,
+                .rasterization_samples = .{ .@"1_bit" = true },
+                .min_sample_shading = 0.0,
+                .alpha_to_coverage_enable = vk.FALSE,
+                .alpha_to_one_enable = vk.FALSE,
+            },
+            .p_rasterization_state = &vk.PipelineRasterizationStateCreateInfo {
+                .line_width = 1.0,
+                .depth_bias_slope_factor = 0.0,
+                .depth_bias_clamp = 0.0,
+                .depth_bias_constant_factor = 0.0,
+                .depth_bias_enable = vk.FALSE,
+                .front_face = .clockwise,
+                .polygon_mode = .fill,
+                .rasterizer_discard_enable = vk.FALSE,
+                .depth_clamp_enable = vk.FALSE,
+            },
+            .p_next = @alignCast(@ptrCast(&vk.PipelineRenderingCreateInfoKHR {
+                .color_attachment_count = 0,
+                .depth_attachment_format = vk.Format.undefined,
+                .stencil_attachment_format = vk.Format.undefined,
+                .view_mask = 0,
+            }))
+        }),
+        null,
+        @ptrCast(&pipeline),
+    );
+    // zig fmt: on
+    errdefer device.destroyPipeline(pipeline, null);
+    debug.assert(result == .success);
+
+    return .{ layout, pipeline };
+}
+
+fn destroyPipeline(device: Device, layout: vk.PipelineLayout, pipeline: vk.Pipeline) void {
+    device.destroyPipeline(pipeline, null);
+    device.destroyPipelineLayout(layout, null);
 }
 
 fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPool, count: u32) ![]Frame {
