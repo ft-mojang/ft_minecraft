@@ -49,7 +49,7 @@ pub fn main() !void {
     defer vk_allocator.deinit();
 
     const chunk = worldgen.generateChunk(0, 0);
-    worldgen.printChunk(chunk);
+    _ = chunk;
 
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
