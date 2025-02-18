@@ -11,7 +11,6 @@ pub const apis: []const vk.ApiInfo = &.{
     vk.extensions.khr_surface,
     vk.extensions.khr_swapchain,
     vk.extensions.ext_debug_utils,
-    vk.extensions.ext_validation_features,
     vk.extensions.khr_dynamic_rendering,
 };
 
