@@ -9,7 +9,6 @@ pub const apis: []const vk.ApiInfo = &.{
     vk.features.version_1_1,
     vk.features.version_1_2,
     vk.extensions.khr_portability_enumeration,
-    vk.extensions.khr_portability_subset,
     vk.extensions.khr_surface,
     vk.extensions.khr_swapchain,
     vk.extensions.ext_debug_utils,
