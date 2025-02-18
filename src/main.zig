@@ -93,11 +93,7 @@ fn render(
 
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
-
-    // Draw with:
-    _ = frame.command_buffer;
     try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
-
     try ctx.device.beginCommandBuffer(frame.command_buffer, &.{});
 
     vulkan.cmdTransitionImageLayout(.{
@@ -108,17 +104,7 @@ fn render(
         .new_layout = .present_src_khr,
     });
 
-    const beginRendering: vk.PfnCmdBeginRenderingKHR = @ptrCast(ctx.vkb.getInstanceProcAddr(
-        ctx.instance.handle,
-        "vkCmdBeginRenderingKHR",
-    )); // FIXME: Handle potential nulls
-
-    const endRendering: vk.PfnCmdEndRenderingKHR = @ptrCast(ctx.vkb.getInstanceProcAddr(
-        ctx.instance.handle,
-        "vkCmdEndRenderingKHR",
-    )); // FIXME: Handle potential nulls
-
-    beginRendering(
+    ctx.device.cmdBeginRenderingKHR(
         frame.command_buffer,
         &vk.RenderingInfoKHR{
             .render_area = vk.Rect2D{
@@ -144,10 +130,8 @@ fn render(
         },
     );
 
-    endRendering(frame.command_buffer);
-
+    ctx.device.cmdEndRenderingKHR(frame.command_buffer);
     try ctx.device.endCommandBuffer(frame.command_buffer);
-
     try renderer.submitAndPresentAcquiredFrame(ctx);
 }
 
