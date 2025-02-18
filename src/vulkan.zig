@@ -29,7 +29,6 @@ pub const disabled_validation_features = [_]vk.ValidationFeatureDisableEXT{};
 
 pub const instance_exts_req = [_][*:0]const u8{
     vk.extensions.khr_surface.name,
-    vk.extensions.ext_validation_features.name,
 } ++ switch (builtin.os.tag) {
     .macos => [_][*:0]const u8{
         vk.extensions.khr_portability_enumeration.name,
@@ -38,14 +37,13 @@ pub const instance_exts_req = [_][*:0]const u8{
 };
 
 pub const instance_exts_opt = [_][*:0]const u8{
-    vk.extensions.ext_debug_utils,
+    vk.extensions.ext_debug_utils.name,
+    vk.extensions.ext_validation_features.name,
 };
 
 pub const device_exts_req = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
     vk.extensions.khr_dynamic_rendering.name,
-    // NOTE: Not available in apple aarch64
-    // vk.extensions.ext_vertex_input_dynamic_state.name
 } ++ switch (builtin.os.tag) {
     .macos => [_][*:0]const u8{
         vk.extensions.khr_portability_subset.name,

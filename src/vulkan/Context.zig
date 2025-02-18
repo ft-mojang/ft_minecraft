@@ -1,10 +1,13 @@
 allocator: Allocator,
 vkb: BaseDispatch,
 instance: Instance,
+instance_extensions: AutoArrayHashMap([*:0]const u8, void),
+validation_layers: AutoArrayHashMap([*:0]const u8, void),
 surface: vk.SurfaceKHR,
 physical_device: vk.PhysicalDevice,
 physical_device_properties: vk.PhysicalDeviceProperties,
 device: Device,
+device_extensions: AutoArrayHashMap([*:0]const u8, void),
 queue_family_index: u32,
 queue_family_properties: vk.QueueFamilyProperties,
 queue: Queue,
@@ -24,7 +27,22 @@ pub fn init(
         return error.InsufficientInstanceVersion;
     }
 
-    self.instance = try initInstance(allocator, self.vkb, platform_instance_exts);
+    self.validation_layers = AutoArrayHashMap([*:0]const u8, void).init(allocator);
+    errdefer self.validation_layers.deinit();
+    try self.validation_layers.ensureTotalCapacity(vulkan.validation_layers_req.len + vulkan.validation_layers_opt.len);
+    const layer_props = try self.vkb.enumerateInstanceLayerPropertiesAlloc(allocator);
+    try appendValidationLayers(&self.validation_layers, &vulkan.validation_layers_req, layer_props);
+    appendValidationLayers(&self.validation_layers, &vulkan.validation_layers_opt, layer_props) catch {};
+
+    self.instance_extensions = AutoArrayHashMap([*:0]const u8, void).init(allocator);
+    errdefer self.instance_extensions.deinit();
+    try self.instance_extensions.ensureTotalCapacity(platform_instance_exts.len + vulkan.instance_exts_req.len + vulkan.instance_exts_opt.len);
+    const instance_ext_props = try self.vkb.enumerateInstanceExtensionPropertiesAlloc(null, allocator);
+    try appendExtensions(&self.instance_extensions, platform_instance_exts, instance_ext_props);
+    try appendExtensions(&self.instance_extensions, &vulkan.instance_exts_req, instance_ext_props);
+    appendExtensions(&self.instance_extensions, &vulkan.instance_exts_opt, instance_ext_props) catch {};
+
+    self.instance = try initInstance(self.vkb, self.validation_layers, self.instance_extensions);
     errdefer self.instance.destroyInstance(null);
 
     if (glfw.createWindowSurface(self.instance.handle, window, null, &self.surface) != 0) {
@@ -36,7 +54,14 @@ pub fn init(
     self.physical_device, self.physical_device_properties = try pickPhysicalDevice(allocator, self.instance);
     self.queue_family_index, self.queue_family_properties = try pickQueueFamily(allocator, self.instance, self.physical_device, self.surface);
 
-    self.device = try initDevice(self.instance, self.physical_device, self.queue_family_index);
+    self.device_extensions = AutoArrayHashMap([*:0]const u8, void).init(allocator);
+    errdefer self.device_extensions.deinit();
+    try self.device_extensions.ensureTotalCapacity(vulkan.device_exts_req.len + vulkan.device_exts_opt.len);
+    const device_ext_props = try self.instance.enumerateDeviceExtensionPropertiesAlloc(self.physical_device, null, allocator);
+    try appendExtensions(&self.device_extensions, &vulkan.device_exts_req, device_ext_props);
+    appendExtensions(&self.device_extensions, &vulkan.device_exts_opt, device_ext_props) catch {};
+
+    self.device = try initDevice(self.instance, self.physical_device, self.queue_family_index, self.device_extensions);
     errdefer self.device.destroyDevice(null);
 
     const queue_handle = self.device.getDeviceQueue(self.queue_family_index, 0);
@@ -46,30 +71,17 @@ pub fn init(
 }
 
 pub fn deinit(self: *Self) void {
+    self.instance_extensions.deinit();
+    self.device_extensions.deinit();
+    self.validation_layers.deinit();
+
     self.device.destroyDevice(null);
     self.instance.destroySurfaceKHR(self.surface, null);
     self.instance.destroyInstance(null);
 }
 
-fn initInstance(
-    allocator: Allocator,
-    vkb: BaseDispatch,
-    platform_instance_exts: [][*:0]const u8,
-) !Instance {
-    var enabled_instance_exts = try ArrayList([*:0]const u8)
-        .initCapacity(allocator, vulkan.instance_exts_req.len + platform_instance_exts.len);
-    defer enabled_instance_exts.deinit();
-    enabled_instance_exts.appendSliceAssumeCapacity(&vulkan.instance_exts_req);
-    for (platform_instance_exts) |platform_ext| {
-        for (enabled_instance_exts.items) |enabled_ext| {
-            if (mem.eql(u8, mem.span(platform_ext), mem.span(enabled_ext))) {
-                break;
-            }
-        } else {
-            enabled_instance_exts.appendAssumeCapacity(platform_ext);
-        }
-    }
-
+fn initInstance(vkb: BaseDispatch, validation_layers: AutoArrayHashMap([*:0]const u8, void), extensions: AutoArrayHashMap([*:0]const u8, void)) !Instance {
+    const validation_features_enabled = extensions.contains(vk.extensions.ext_validation_features.name);
     const validation_features = vk.ValidationFeaturesEXT{
         .enabled_validation_feature_count = vulkan.enabled_validation_features.len,
         .p_enabled_validation_features = &vulkan.enabled_validation_features,
@@ -77,19 +89,19 @@ fn initInstance(
         .p_disabled_validation_features = &vulkan.disabled_validation_features,
     };
 
-    const instance_create_info: vk.InstanceCreateInfo = .{
-        .p_next = &validation_features,
+    const create_info: vk.InstanceCreateInfo = .{
+        .p_next = if (validation_features_enabled) &validation_features else null,
         .flags = .{ .enumerate_portability_bit_khr = (builtin.os.tag == .macos) },
         .p_application_info = &vulkan.app_info,
-        .enabled_layer_count = vulkan.validation_layers_req.len,
-        .pp_enabled_layer_names = &vulkan.validation_layers_req,
-        .enabled_extension_count = @intCast(enabled_instance_exts.items.len),
-        .pp_enabled_extension_names = enabled_instance_exts.items.ptr,
+        .enabled_layer_count = @intCast(validation_layers.count()),
+        .pp_enabled_layer_names = validation_layers.keys().ptr,
+        .enabled_extension_count = @intCast(extensions.count()),
+        .pp_enabled_extension_names = extensions.keys().ptr,
     };
 
-    const instance_handle = try vkb.createInstance(&instance_create_info, null);
-    const vki = try InstanceDispatch.load(instance_handle, vkb.dispatch.vkGetInstanceProcAddr);
-    return Instance.init(instance_handle, vki);
+    const handle = try vkb.createInstance(&create_info, null);
+    const vki = try InstanceDispatch.load(handle, vkb.dispatch.vkGetInstanceProcAddr);
+    return Instance.init(handle, vki);
 }
 
 fn pickPhysicalDevice(allocator: Allocator, instance: Instance) !struct { vk.PhysicalDevice, vk.PhysicalDeviceProperties } {
@@ -130,8 +142,9 @@ fn initDevice(
     instance: Instance,
     physical_device: vk.PhysicalDevice,
     queue_family_index: u32,
+    extensions: AutoArrayHashMap([*:0]const u8, void),
 ) !Device {
-    const device_create_info: vk.DeviceCreateInfo = .{
+    const create_info: vk.DeviceCreateInfo = .{
         .queue_create_info_count = 1,
         .p_queue_create_infos = &[_]vk.DeviceQueueCreateInfo{
             .{
@@ -140,19 +153,45 @@ fn initDevice(
                 .queue_family_index = queue_family_index,
             },
         },
-        .enabled_layer_count = vulkan.validation_layers_req.len,
-        .pp_enabled_layer_names = &vulkan.validation_layers_req,
-        .enabled_extension_count = vulkan.device_exts_req.len,
-        .pp_enabled_extension_names = &vulkan.device_exts_req,
+        .enabled_extension_count = @intCast(extensions.count()),
+        .pp_enabled_extension_names = extensions.keys().ptr,
         .p_enabled_features = &.{},
         .p_next = &vk.PhysicalDeviceDynamicRenderingFeaturesKHR{
             .dynamic_rendering = vk.TRUE,
         },
     };
 
-    const device_handle = try instance.createDevice(physical_device, &device_create_info, null);
-    const vkd = try DeviceDispatch.load(device_handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
-    return Device.init(device_handle, vkd);
+    const handle = try instance.createDevice(physical_device, &create_info, null);
+    const vkd = try DeviceDispatch.load(handle, instance.wrapper.dispatch.vkGetDeviceProcAddr);
+    return Device.init(handle, vkd);
+}
+
+fn appendExtensions(enabled_exts: *AutoArrayHashMap([*:0]const u8, void), exts: []const [*:0]const u8, ext_props: []vk.ExtensionProperties) !void {
+    for (exts) |ext| {
+        for (ext_props) |prop| {
+            if (mem.eql(u8, mem.sliceTo(&prop.extension_name, 0), mem.span(ext))) {
+                enabled_exts.putAssumeCapacity(ext, {});
+                break;
+            }
+        } else {
+            log.warn("instance extension missing: {s}", .{ext});
+            return error.ExtensionNotPresent;
+        }
+    }
+}
+
+fn appendValidationLayers(enabled_layers: *AutoArrayHashMap([*:0]const u8, void), layers: []const [*:0]const u8, layer_props: []vk.LayerProperties) !void {
+    for (layers) |layer| {
+        for (layer_props) |prop| {
+            if (mem.eql(u8, mem.sliceTo(&prop.layer_name, 0), mem.span(layer))) {
+                enabled_layers.putAssumeCapacity(layer, {});
+                break;
+            }
+        } else {
+            log.warn("validation layer missing: {s}", .{layer});
+            return error.ExtensionNotPresent;
+        }
+    }
 }
 
 const Self = @This();
@@ -170,7 +209,7 @@ const std = @import("std");
 const log = std.log;
 const mem = std.mem;
 const Allocator = mem.Allocator;
-const ArrayList = std.ArrayList;
+const AutoArrayHashMap = std.AutoArrayHashMap;
 
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
