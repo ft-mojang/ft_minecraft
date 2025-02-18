@@ -8,8 +8,13 @@ pub const apis: []const vk.ApiInfo = &.{
     vk.features.version_1_0,
     vk.features.version_1_1,
     vk.features.version_1_2,
+    vk.extensions.khr_portability_enumeration,
+    vk.extensions.khr_portability_subset,
     vk.extensions.khr_surface,
     vk.extensions.khr_swapchain,
+    vk.extensions.ext_debug_utils,
+    vk.extensions.ext_validation_features,
+    vk.extensions.khr_dynamic_rendering,
 };
 
 pub const validation_layers_req = if (config.validation_layers) [_][*:0]const u8{

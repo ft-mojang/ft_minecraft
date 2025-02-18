@@ -89,6 +89,7 @@ fn render(
     renderer: *vulkan.Renderer,
     interpolation_alpha: f64,
 ) !void {
+    _ = interpolation_alpha;
 
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
@@ -116,8 +117,6 @@ fn render(
         ctx.instance.handle,
         "vkCmdEndRenderingKHR",
     )); // FIXME: Handle potential nulls
-
-    _ = interpolation_alpha;
 
     beginRendering(
         frame.command_buffer,
