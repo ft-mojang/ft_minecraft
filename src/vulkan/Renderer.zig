@@ -353,11 +353,11 @@ fn createFrames(
     const frames = try allocator.alloc(Frame, count);
     var ok = true;
 
-    const mesh_staging_buffer_memory_properties = vk.MemoryPropertyFlags{
+    const vertex_staging_buffer_properties = vk.MemoryPropertyFlags{
         .host_visible_bit = true,
         .host_coherent_bit = true,
     };
-    const mesh_staging_buffer_info = vk.BufferCreateInfo{
+    const vertex_staging_buffer_info = vk.BufferCreateInfo{
         .size = default_mesh_buffer_size,
         .sharing_mode = .exclusive,
         .usage = .{ .transfer_src_bit = true },
@@ -384,9 +384,9 @@ fn createFrames(
                 log.err("failed to create semaphore: {!}", .{e});
                 break :blk vk.Semaphore.null_handle;
             },
-            .mesh_staging_buffer = vk_allocator.createBuffer(
-                mesh_staging_buffer_info,
-                mesh_staging_buffer_memory_properties,
+            .vertex_staging_buffer = vk_allocator.createBuffer(
+                vertex_staging_buffer_info,
+                vertex_staging_buffer_properties,
             ) catch |e| {
                 ok = false;
                 log.err("failed to create mesh staging buffer: {!}", .{e});
@@ -410,7 +410,7 @@ fn destroyFrames(
     frames: []Frame,
 ) void {
     for (frames) |frame| {
-        vk_allocator.destroyBuffer(frame.mesh_staging_buffer);
+        vk_allocator.destroyBuffer(frame.vertex_staging_buffer);
         device.destroyFence(frame.in_flight, null);
         device.destroySemaphore(frame.image_acquired, null);
         device.destroySemaphore(frame.render_finished, null);
@@ -427,7 +427,7 @@ const Frame = struct {
     command_buffer: vk.CommandBuffer,
     image: vk.Image = vk.Image.null_handle,
     view: vk.ImageView = vk.ImageView.null_handle,
-    mesh_staging_buffer: Buffer,
+    vertex_staging_buffer: Buffer,
 };
 
 const vulkan = @import("../vulkan.zig");
