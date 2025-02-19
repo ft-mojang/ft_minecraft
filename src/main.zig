@@ -42,11 +42,11 @@ pub fn main() !void {
     var vk_ctx = try vulkan.Context.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var renderer = try vulkan.Renderer.init(arena, vk_ctx);
-    defer renderer.deinit(vk_ctx);
-
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
+
+    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx);
+    defer renderer.deinit(vk_ctx);
 
     const chunk = worldgen.Chunk.generate(0, 0);
     const vertices, const indices, const block_ids = try chunk.toMesh(arena);
@@ -146,7 +146,7 @@ const vulkan = @import("vulkan.zig");
 const worldgen = @import("worldgen.zig");
 
 const std = @import("std");
-const log = std.log;
+const log = std.log.scoped(.main);
 const heap = std.heap;
 
 const vk = @import("vulkan");

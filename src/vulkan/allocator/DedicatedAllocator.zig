@@ -24,7 +24,12 @@ pub fn allocate(
 ) !AllocationIndex {
     const transaction = self.beginTransaction();
 
-    const memory_type = try vulkan.findMemoryType(requirements.memory_type_bits, property_flags);
+    const memory_type = try vulkan.findMemoryType(
+        self.ctx.instance,
+        self.ctx.physical_device,
+        requirements.memory_type_bits,
+        property_flags,
+    );
 
     const allocate_info = vk.MemoryAllocateInfo{
         .allocation_size = requirements.size,

@@ -1,4 +1,5 @@
 allocator: Allocator,
+vk_allocator: *vulkan.Allocator,
 command_pool: vk.CommandPool,
 surface_format: vk.SurfaceFormatKHR,
 present_mode: vk.PresentModeKHR,
@@ -11,6 +12,7 @@ views: []vk.ImageView,
 frames: []Frame,
 pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
+vertex_buffer: Buffer,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -24,12 +26,16 @@ const preferred_surface_format = vk.SurfaceFormatKHR{
 
 const max_frames_in_flight: u32 = 2;
 
+const default_mesh_buffer_size: usize = 64 * @sizeOf(Vec3f);
+
 pub fn init(
     allocator: Allocator,
+    vk_allocator: *vulkan.Allocator,
     ctx: Context,
 ) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
+    self.vk_allocator = vk_allocator;
     const capabilities = try ctx.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
         ctx.physical_device,
         ctx.surface,
@@ -125,7 +131,7 @@ pub fn init(
     );
     errdefer ctx.device.destroyCommandPool(self.command_pool, null);
 
-    self.frames = try createFrames(allocator, ctx.device, self.command_pool, max_frames_in_flight);
+    self.frames = try createFrames(allocator, vk_allocator, ctx.device, self.command_pool, max_frames_in_flight);
 
     self.pipeline_layout, self.pipeline = try createPipeline(ctx.device);
     errdefer destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
@@ -135,7 +141,7 @@ pub fn init(
 
 pub fn deinit(self: Self, ctx: Context) void {
     destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
-    destroyFrames(self.allocator, ctx.device, self.frames);
+    destroyFrames(self.allocator, self.vk_allocator, ctx.device, self.frames);
     ctx.device.destroyCommandPool(self.command_pool, null);
     vulkan.destroyImageViews(self.allocator, ctx.device, self.views);
     self.allocator.free(self.images);
@@ -326,7 +332,13 @@ fn destroyPipeline(device: Device, layout: vk.PipelineLayout, pipeline: vk.Pipel
     device.destroyPipelineLayout(layout, null);
 }
 
-fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPool, count: u32) ![]Frame {
+fn createFrames(
+    allocator: Allocator,
+    vk_allocator: *vulkan.Allocator,
+    device: Device,
+    command_pool: vk.CommandPool,
+    count: u32,
+) ![]Frame {
     const command_buffers = try allocator.alloc(vk.CommandBuffer, count);
     defer allocator.free(command_buffers);
     try device.allocateCommandBuffers(
@@ -340,6 +352,16 @@ fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPo
 
     const frames = try allocator.alloc(Frame, count);
     var ok = true;
+
+    const mesh_staging_buffer_memory_properties = vk.MemoryPropertyFlags{
+        .host_visible_bit = true,
+        .host_coherent_bit = true,
+    };
+    const mesh_staging_buffer_info = vk.BufferCreateInfo{
+        .size = default_mesh_buffer_size,
+        .sharing_mode = .exclusive,
+        .usage = .{ .transfer_src_bit = true },
+    };
 
     for (frames, command_buffers) |*frame, command_buffer| {
         const fence_info = vk.FenceCreateInfo{
@@ -362,6 +384,14 @@ fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPo
                 log.err("failed to create semaphore: {!}", .{e});
                 break :blk vk.Semaphore.null_handle;
             },
+            .mesh_staging_buffer = vk_allocator.createBuffer(
+                mesh_staging_buffer_info,
+                mesh_staging_buffer_memory_properties,
+            ) catch |e| {
+                ok = false;
+                log.err("failed to create mesh staging buffer: {!}", .{e});
+                @panic("todo"); // TODO: Need some stub value for buffer.
+            },
         };
     }
 
@@ -369,12 +399,18 @@ fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPo
         return frames;
     }
 
-    destroyFrames(allocator, device, frames);
+    destroyFrames(allocator, vk_allocator, device, frames);
     return error.FailedToCreateFrames;
 }
 
-fn destroyFrames(allocator: Allocator, device: Device, frames: []Frame) void {
+fn destroyFrames(
+    allocator: Allocator,
+    vk_allocator: *vulkan.Allocator,
+    device: Device,
+    frames: []Frame,
+) void {
     for (frames) |frame| {
+        vk_allocator.destroyBuffer(frame.mesh_staging_buffer);
         device.destroyFence(frame.in_flight, null);
         device.destroySemaphore(frame.image_acquired, null);
         device.destroySemaphore(frame.render_finished, null);
@@ -391,11 +427,13 @@ const Frame = struct {
     command_buffer: vk.CommandBuffer,
     image: vk.Image = vk.Image.null_handle,
     view: vk.ImageView = vk.ImageView.null_handle,
+    mesh_staging_buffer: Buffer,
 };
 
 const vulkan = @import("../vulkan.zig");
 const Context = vulkan.Context;
 const Device = vulkan.Device;
+const Buffer = vulkan.vk_allocator.Buffer;
 
 const builtin = @import("builtin");
 const std = @import("std");
