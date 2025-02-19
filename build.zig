@@ -29,6 +29,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const executables = [_]*std.Build.Step.Compile{exe, check};
+
     const vertex_shader_module = b.addModule("shader.vert", .{
         .root_source_file = compileShader(
             b,
@@ -36,6 +38,7 @@ pub fn build(b: *std.Build) void {
             "shader.vert.spv",
         ),
     });
+
     const fragment_shader_module = b.addModule("shader.frag", .{
         .root_source_file = compileShader(
             b,
@@ -43,10 +46,6 @@ pub fn build(b: *std.Build) void {
             "shader.frag.spv",
         ),
     });
-
-    // Add options as a moduble importable with @import("config")
-    exe.root_module.addOptions("config", options);
-    check.root_module.addOptions("config", options);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -58,16 +57,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("zm");
 
-    const dep_mach_glfw = b.dependency("mach_glfw", .{
+    const mach_glfw = b.dependency("mach_glfw", .{
         .target = target,
         .optimize = optimize,
-    });
-
-    exe.root_module.addImport("zm", zm);
-    check.root_module.addImport("zm", zm);
-
-    exe.root_module.addImport("mach-glfw", dep_mach_glfw.module("mach-glfw"));
-    check.root_module.addImport("mach-glfw", dep_mach_glfw.module("mach-glfw"));
+    }).module("mach-glfw");
 
     // Get the (lazy) path to vk.xml:
     const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
@@ -82,12 +75,16 @@ pub fn build(b: *std.Build) void {
         .root_source_file = vk_generate_cmd.addOutputFileArg("vk.zig"),
     });
 
-    exe.root_module.addImport("vulkan", vk_module);
-    exe.root_module.addImport("shader.vert", vertex_shader_module);
-    exe.root_module.addImport("shader.frag", fragment_shader_module);
-    check.root_module.addImport("vulkan", vk_module);
-    check.root_module.addImport("shader.vert", vertex_shader_module);
-    check.root_module.addImport("shader.frag", fragment_shader_module);
+    for (executables) |executable| {
+        // Add options as a moduble importable with @import("config")
+        executable.root_module.addOptions("config", options);
+
+        executable.root_module.addImport("zm", zm);
+        executable.root_module.addImport("mach-glfw", mach_glfw);
+        executable.root_module.addImport("vulkan", vk_module);
+        executable.root_module.addImport("shader.vert", vertex_shader_module);
+        executable.root_module.addImport("shader.frag", fragment_shader_module);
+    }
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
@@ -135,7 +132,7 @@ fn compileShader(
     input_path: std.Build.LazyPath,
     output_name: []const u8,
 ) std.Build.LazyPath {
-    const command = b.addSystemCommand(&.{ "glslangValidator"});
+    const command = b.addSystemCommand(&.{"glslangValidator"});
     command.addArgs(&.{"--target-env", "vulkan1.2"});
     command.addArg("-o");
     const output = command.addOutputFileArg(output_name);
