@@ -363,6 +363,18 @@ fn createFrames(
         .usage = .{ .transfer_src_bit = true },
     };
 
+    const vertex_buffer_properties = vk.MemoryPropertyFlags{
+        .device_local_bit = true,
+    };
+    const vertex_buffer_info = vk.BufferCreateInfo{
+        .size = default_mesh_buffer_size,
+        .sharing_mode = .exclusive,
+        .usage = .{
+            .transfer_dst_bit = true,
+            .vertex_buffer_bit = true,
+        },
+    };
+
     for (frames, command_buffers) |*frame, command_buffer| {
         const fence_info = vk.FenceCreateInfo{
             .flags = .{ .signaled_bit = true },
@@ -389,7 +401,15 @@ fn createFrames(
                 vertex_staging_buffer_properties,
             ) catch |e| {
                 ok = false;
-                log.err("failed to create mesh staging buffer: {!}", .{e});
+                log.err("failed to create vertex staging buffer: {!}", .{e});
+                @panic("todo"); // TODO: Need some stub value for buffer.
+            },
+            .vertex_buffer = vk_allocator.createBuffer(
+                vertex_buffer_info,
+                vertex_buffer_properties,
+            ) catch |e| {
+                ok = false;
+                log.err("failed to create vertex buffer: {!}", .{e});
                 @panic("todo"); // TODO: Need some stub value for buffer.
             },
         };
@@ -410,6 +430,7 @@ fn destroyFrames(
     frames: []Frame,
 ) void {
     for (frames) |frame| {
+        vk_allocator.destroyBuffer(frame.vertex_buffer);
         vk_allocator.destroyBuffer(frame.vertex_staging_buffer);
         device.destroyFence(frame.in_flight, null);
         device.destroySemaphore(frame.image_acquired, null);
@@ -428,6 +449,7 @@ const Frame = struct {
     image: vk.Image = vk.Image.null_handle,
     view: vk.ImageView = vk.ImageView.null_handle,
     vertex_staging_buffer: Buffer,
+    vertex_buffer: Buffer,
 };
 
 const vulkan = @import("../vulkan.zig");
