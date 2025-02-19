@@ -48,8 +48,11 @@ pub fn main() !void {
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
-    const chunk = worldgen.generateChunk(0, 0);
-    _ = chunk;
+    const chunk = worldgen.Chunk.generate(0, 0);
+    const vertices, const indices, const block_ids = try chunk.toMesh(arena);
+    _ = vertices;
+    _ = indices;
+    _ = block_ids;
 
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
@@ -148,3 +151,4 @@ const heap = std.heap;
 
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
+const zm = @import("zm");
