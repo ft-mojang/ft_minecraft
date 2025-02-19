@@ -206,18 +206,37 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, ctx: vulkan.Context) !void {
 
 fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
     const vertex_shader_code = @embedFile("shader.vert");
-    const vertex_shader = try device.createShaderModule(&vk.ShaderModuleCreateInfo{
-        .p_code = @alignCast(@ptrCast(vertex_shader_code)),
-        .code_size = vertex_shader_code.len,
-    }, null);
+    const vertex_shader = try device.createShaderModule(
+        &vk.ShaderModuleCreateInfo{
+            .p_code = @alignCast(@ptrCast(vertex_shader_code)),
+            .code_size = vertex_shader_code.len,
+        },
+        null,
+    );
     defer device.destroyShaderModule(vertex_shader, null);
 
     const fragment_shader_code = @embedFile("shader.frag");
-    const fragment_shader = try device.createShaderModule(&.{
-        .p_code = @alignCast(@ptrCast(fragment_shader_code)),
-        .code_size = fragment_shader_code.len,
-    }, null);
+    const fragment_shader = try device.createShaderModule(
+        &.{
+            .p_code = @alignCast(@ptrCast(fragment_shader_code)),
+            .code_size = fragment_shader_code.len,
+        },
+        null,
+    );
     defer device.destroyShaderModule(fragment_shader, null);
+
+    const vertex_binding_description = vk.VertexInputBindingDescription{
+        .binding = 0,
+        .stride = @sizeOf(Vec3f),
+        .input_rate = .vertex,
+    };
+
+    const vertex_attribute_description = vk.VertexInputAttributeDescription{
+        .binding = 0,
+        .location = 0,
+        .format = .r32g32b32_sfloat,
+        .offset = 0,
+    };
 
     const layout = try device.createPipelineLayout(&.{}, null);
     errdefer device.destroyPipelineLayout(layout, null);
@@ -228,27 +247,27 @@ fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
     const result = try device.createGraphicsPipelines(
         vk.PipelineCache.null_handle,
         1, // Create info count,
-        @ptrCast(&vk.GraphicsPipelineCreateInfo{
+        @alignCast(@ptrCast(&vk.GraphicsPipelineCreateInfo{
             .layout = layout,
-            .p_viewport_state = @ptrCast(&vk.PipelineViewportStateCreateInfo{
+            .p_viewport_state = &vk.PipelineViewportStateCreateInfo{
                 .viewport_count = 1,
                 .scissor_count = 1,
-            }),
-            .p_dynamic_state = @ptrCast(&vk.PipelineDynamicStateCreateInfo {
+            },
+            .p_dynamic_state = &vk.PipelineDynamicStateCreateInfo {
                 .dynamic_state_count = 2,
                 .p_dynamic_states = &.{
                     vk.DynamicState.viewport,
                     vk.DynamicState.scissor,
                     vk.DynamicState.vertex_input_ext,
                 },
-            }),
+            },
             .subpass = 0,
             .base_pipeline_index = 0,
             .p_vertex_input_state = &vk.PipelineVertexInputStateCreateInfo {
-                .vertex_binding_description_count = 0,
-                .p_vertex_binding_descriptions = null,
-                .vertex_attribute_description_count = 0,
-                .p_vertex_attribute_descriptions = null,
+                .vertex_binding_description_count = 1,
+                .p_vertex_binding_descriptions = @alignCast(@ptrCast(&vertex_binding_description)),
+                .vertex_attribute_description_count = 1,
+                .p_vertex_attribute_descriptions = @alignCast(@ptrCast(&vertex_attribute_description)),
             },
             .p_input_assembly_state = &vk.PipelineInputAssemblyStateCreateInfo {
                 .topology = .triangle_list,
@@ -280,20 +299,20 @@ fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
                 .depth_bias_clamp = 0.0,
                 .depth_bias_constant_factor = 0.0,
                 .depth_bias_enable = vk.FALSE,
-                .front_face = .clockwise,
+                .front_face = .counter_clockwise,
                 .polygon_mode = .fill,
                 .rasterizer_discard_enable = vk.FALSE,
                 .depth_clamp_enable = vk.FALSE,
             },
-            .p_next = @alignCast(@ptrCast(&vk.PipelineRenderingCreateInfoKHR {
+            .p_next = &vk.PipelineRenderingCreateInfoKHR {
                 .color_attachment_count = 0,
                 .depth_attachment_format = vk.Format.undefined,
                 .stencil_attachment_format = vk.Format.undefined,
                 .view_mask = 0,
-            }))
-        }),
+            }
+        })),
         null,
-        @ptrCast(&pipeline),
+        @alignCast(@ptrCast(&pipeline)),
     );
     // zig fmt: on
     errdefer device.destroyPipeline(pipeline, null);
@@ -380,7 +399,7 @@ const Device = vulkan.Device;
 
 const builtin = @import("builtin");
 const std = @import("std");
-const log = std.log.scoped(.vulkan);
+const log = std.log.scoped(.vulkan_renderer);
 const debug = std.debug;
 const mem = std.mem;
 const math = std.math;
@@ -388,3 +407,5 @@ const meta = std.meta;
 const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
+const zm = @import("zm");
+const Vec3f = zm.Vec3f;

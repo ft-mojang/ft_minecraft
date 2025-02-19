@@ -206,7 +206,7 @@ const Queue = vulkan.Queue;
 
 const builtin = @import("builtin");
 const std = @import("std");
-const log = std.log;
+const log = std.log.scoped(.vulkan_context);
 const mem = std.mem;
 const Allocator = mem.Allocator;
 const AutoArrayHashMap = std.AutoArrayHashMap;
