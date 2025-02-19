@@ -53,10 +53,18 @@ pub fn build(b: *std.Build) void {
     // step when running `zig build`).
     b.installArtifact(exe);
 
+    const zm = b.dependency("zm", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zm");
+
     const dep_mach_glfw = b.dependency("mach_glfw", .{
         .target = target,
         .optimize = optimize,
     });
+
+    exe.root_module.addImport("zm", zm);
+    check.root_module.addImport("zm", zm);
 
     exe.root_module.addImport("mach-glfw", dep_mach_glfw.module("mach-glfw"));
     check.root_module.addImport("mach-glfw", dep_mach_glfw.module("mach-glfw"));
