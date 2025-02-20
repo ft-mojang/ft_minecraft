@@ -1,5 +1,3 @@
-const noise = fastnoise.Noise(f64){};
-
 /// Enum variants for all unique block types.
 pub const Block = enum(u8) {
     air,
@@ -26,18 +24,38 @@ pub const Chunk = struct {
     pub const volume = size_xz * size_y * size_xz;
 
     pub fn generate(chunk_x: Coord, chunk_z: Coord) Chunk {
+        const seed = 0xdead;
+        const octave_count = 8;
+        const octave_offset: Fp = 42.0; // Arbitrary offset to avoid interferance between octaves when near zero.
+        const persistence: Fp = 0.5;
+        const lacunarity: Fp = 2.0;
+
         var chunk: Chunk = undefined;
         for (0..size_xz) |x| {
             for (0..size_xz) |z| {
-                const block_x = @as(Block.Coord, chunk_x) * size_xz + @as(Block.Coord, @intCast(x));
-                const block_z = @as(Block.Coord, chunk_z) * size_xz + @as(Block.Coord, @intCast(z));
-                const noise_sample = noise.genNoise2D(@floatFromInt(block_x), @floatFromInt(block_z));
-                const height = @as(Block.Coord, @intFromFloat(noise_sample * size_y)) - 1;
+                const block_x: Fp = @floatFromInt(@as(Block.Coord, chunk_x) * size_xz + @as(Block.Coord, @intCast(x)));
+                const block_z: Fp = @floatFromInt(@as(Block.Coord, chunk_z) * size_xz + @as(Block.Coord, @intCast(z)));
+                var amplitude: Fp = 1.0;
+                var frequency: Fp = 1.0;
+                var height_max: Fp = 0.0;
+                var height_sum: Fp = 0.0;
+                for (0..octave_count) |i| {
+                    // This additional 0.5 offset is to avoid passing integer coords to the noise function,
+                    // as that will always return a value of 0 due to grid alignment artifacts.
+                    const offset = 0.5 + octave_offset * @as(Fp, @floatFromInt(i));
+                    height_max += amplitude;
+                    height_sum += amplitude * Noise.singlePerlin2D(seed, block_x * frequency + offset, block_z * frequency + offset);
+                    amplitude *= persistence;
+                    frequency *= lacunarity;
+                }
+                const normalized_height = height_sum / height_max; // Range -1 to 1 (inclusive)
+                const block_height = @as(Block.Coord, @intFromFloat(normalized_height * size_y)) - 1;
                 for (0..size_y) |y| {
-                    chunk.blocks[(z * size_y + y) * size_xz + x] = if (y <= height) .stone else .air;
+                    chunk.blocks[(z * size_y + y) * size_xz + x] = if (y <= block_height) .stone else .air;
                 }
             }
         }
+
         return chunk;
     }
 
@@ -126,7 +144,10 @@ pub const Chunk = struct {
     pub const Coord = i28;
 };
 
+const Fp = f64;
+
 const fastnoise = @import("worldgen/fastnoise.zig");
+const Noise = fastnoise.Noise(Fp);
 
 const std = @import("std");
 const debug = std.debug;
