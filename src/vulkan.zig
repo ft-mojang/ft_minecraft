@@ -226,8 +226,8 @@ pub const CommandBufferSingleUse = struct {
         self.vk_handle = try createCommandBuffer(device, pool);
         errdefer destroyCommandBuffer(device, pool, self.vk_handle);
         self.pool = pool;
-
-        try device.beginCommandBuffer(self.vk_handle, &.{});
+        self.device = device;
+        try self.device.beginCommandBuffer(self.vk_handle, &.{});
         return self;
     }
 
@@ -252,6 +252,11 @@ pub const CommandBufferSingleUse = struct {
         } else |e| {
             err = e;
         }
+
+        // TODO: Proper sync
+        self.device.queueWaitIdle(queue) catch |e| {
+            err = e;
+        };
 
         destroyCommandBuffer(self.device, self.pool, self.vk_handle);
         self.vk_handle = .null_handle;

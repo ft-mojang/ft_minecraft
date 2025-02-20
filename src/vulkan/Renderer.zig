@@ -27,12 +27,11 @@ const preferred_surface_format = vk.SurfaceFormatKHR{
 
 const max_frames_in_flight: u32 = 2;
 
-const default_vertex_buffer_size: usize = 64 * @sizeOf(Vec3f);
-
 pub fn init(
     allocator: Allocator,
     vk_allocator: *vulkan.Allocator,
     ctx: Context,
+    vertex_buffer_size: vk.DeviceSize,
 ) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
@@ -139,7 +138,7 @@ pub fn init(
 
     self.vertex_staging_buffer = try self.vk_allocator.createBuffer(
         .{
-            .size = default_vertex_buffer_size,
+            .size = vertex_buffer_size,
             .sharing_mode = .exclusive,
             .usage = .{ .transfer_src_bit = true },
         },
@@ -152,7 +151,7 @@ pub fn init(
 
     self.vertex_buffer = try self.vk_allocator.createBuffer(
         .{
-            .size = default_vertex_buffer_size,
+            .size = vertex_buffer_size,
             .sharing_mode = .exclusive,
             .usage = .{
                 .transfer_dst_bit = true,
@@ -438,20 +437,6 @@ const Frame = struct {
     command_buffer: vk.CommandBuffer,
     image: vk.Image = vk.Image.null_handle,
     view: vk.ImageView = vk.ImageView.null_handle,
-
-    pub fn stage_vertex_data(
-        self: Frame,
-        vk_allocator: *vulkan.Allocator,
-        data: []const Vec3f,
-    ) !void {
-        debug.assert(data.len * @sizeOf(Vec3f) <= default_vertex_buffer_size); // TODO: Implement growing
-
-        const allocation = self.vertex_staging_buffer.allocation;
-        const buffer_data_ptr: [*]Vec3f = @alignCast(@ptrCast(try vk_allocator.map(allocation)));
-        defer vk_allocator.unmap(allocation); // TODO: Persistent map?
-
-        mem.copyForwards(Vec3f, buffer_data_ptr[0..data.len], data);
-    }
 };
 
 const vulkan = @import("../vulkan.zig");

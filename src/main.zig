@@ -45,11 +45,12 @@ pub fn main() !void {
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
-    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx);
-    defer renderer.deinit(vk_ctx);
-
     const chunk = worldgen.Chunk.generate(0, 0);
     const vertices, const indices, const block_ids = try chunk.toMesh(arena);
+    const vertex_buffer_size = @sizeOf(Vec3f) * vertices.len;
+
+    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx, vertex_buffer_size);
+    defer renderer.deinit(vk_ctx);
 
     try vk_allocator.copySliceToAllocation(Vec3f, vertices, renderer.vertex_staging_buffer.allocation);
 
@@ -60,7 +61,7 @@ pub fn main() !void {
         renderer.vertex_buffer.vk_handle,
         1,
         @alignCast(@ptrCast(&vk.BufferCopy{
-            .size = @sizeOf(Vec3f) * vertices.len,
+            .size = vertex_buffer_size,
             .src_offset = 0,
             .dst_offset = 0,
         })),
