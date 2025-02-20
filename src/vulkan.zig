@@ -130,15 +130,26 @@ pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
     // zig fmt: off
     const transition = if (
         options.old_layout == vk.ImageLayout.undefined and
+        options.new_layout == vk.ImageLayout.color_attachment_optimal)
+    // zig fmt: on
+    blk: {
+        break :blk Transition{
+            .src_stage = .{ .top_of_pipe_bit = true },
+            .dst_stage = .{ .color_attachment_output_bit = true },
+            .src_access_mask = .{},
+            .dst_access_mask = .{ .color_attachment_write_bit = true },
+        };
+    } else if (
+    // zig fmt: off
+        options.old_layout == vk.ImageLayout.color_attachment_optimal and
         options.new_layout == vk.ImageLayout.present_src_khr)
     // zig fmt: on
     blk: {
-        // FIXME: This is not really a transition you want, just temp
         break :blk Transition{
-            .src_stage = .{ .top_of_pipe_bit = true },
-            .dst_stage = .{ .fragment_shader_bit = true },
-            .src_access_mask = .{},
-            .dst_access_mask = .{ .shader_read_bit = true },
+            .src_stage = .{ .color_attachment_output_bit = true },
+            .dst_stage = .{ .bottom_of_pipe_bit = true },
+            .src_access_mask = .{ .color_attachment_write_bit = true },
+            .dst_access_mask = .{},
         };
     } else {
         @panic("layout transition not defined");

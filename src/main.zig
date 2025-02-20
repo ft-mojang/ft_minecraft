@@ -128,13 +128,13 @@ fn render(
     try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
     try ctx.device.beginCommandBuffer(frame.command_buffer, &.{});
 
-    //vulkan.cmdTransitionImageLayout(.{
-    //    .device = ctx.device,
-    //    .command_buffer = frame.command_buffer,
-    //    .image = frame.image,
-    //    .old_layout = .undefined,
-    //    .new_layout = .present_src_khr,
-    //});
+    vulkan.cmdTransitionImageLayout(.{
+        .device = ctx.device,
+        .command_buffer = frame.command_buffer,
+        .image = frame.image,
+        .old_layout = .undefined,
+        .new_layout = .color_attachment_optimal,
+    });
 
     ctx.device.cmdBeginRenderingKHR(
         frame.command_buffer,
@@ -149,7 +149,7 @@ fn render(
             .p_color_attachments = @alignCast(@ptrCast(&.{
                 vk.RenderingAttachmentInfoKHR{
                     .image_view = frame.view,
-                    .image_layout = vk.ImageLayout.shader_read_only_optimal,
+                    .image_layout = vk.ImageLayout.color_attachment_optimal,
                     .resolve_mode = .{},
                     .resolve_image_layout = .undefined,
                     .load_op = .clear,
@@ -206,6 +206,15 @@ fn render(
     ctx.device.cmdDrawIndexed(frame.command_buffer, @truncate(renderer.indices.len), 1, 0, 0, 0);
 
     ctx.device.cmdEndRenderingKHR(frame.command_buffer);
+
+    vulkan.cmdTransitionImageLayout(.{
+        .device = ctx.device,
+        .command_buffer = frame.command_buffer,
+        .image = frame.image,
+        .old_layout = .color_attachment_optimal,
+        .new_layout = .present_src_khr,
+    });
+
     try ctx.device.endCommandBuffer(frame.command_buffer);
     try renderer.submitAndPresentAcquiredFrame(ctx);
 }
