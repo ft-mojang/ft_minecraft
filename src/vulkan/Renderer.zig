@@ -141,7 +141,7 @@ pub fn init(
 
     self.frames = try createFrames(allocator, vk_allocator, ctx.device, self.command_pool, max_frames_in_flight);
 
-    self.pipeline_layout, self.pipeline = try createPipeline(ctx.device);
+    self.pipeline_layout, self.pipeline = try createPipeline(ctx.device, self.surface_format.format);
     errdefer destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
 
     self.vertex_staging_buffer = try self.vk_allocator.createBuffer(
@@ -274,7 +274,7 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, ctx: vulkan.Context) !void {
     // TODO: Handle out of date / suboptimal
 }
 
-fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
+fn createPipeline(device: Device, format: vk.Format) !struct { vk.PipelineLayout, vk.Pipeline } {
     const vertex_shader_code = @embedFile("shader.vert");
     const vertex_shader = try device.createShaderModule(
         &vk.ShaderModuleCreateInfo{
@@ -328,7 +328,6 @@ fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
                 .p_dynamic_states = &.{
                     vk.DynamicState.viewport,
                     vk.DynamicState.scissor,
-                    vk.DynamicState.vertex_input_ext,
                 },
             },
             .subpass = 0,
@@ -374,8 +373,32 @@ fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
                 .rasterizer_discard_enable = vk.FALSE,
                 .depth_clamp_enable = vk.FALSE,
             },
+            .p_color_blend_state = &vk.PipelineColorBlendStateCreateInfo{
+                .logic_op_enable = vk.FALSE,
+                .logic_op = .xor,
+                .blend_constants = .{0.0, 0.0, 0.0, 0.0},
+                .attachment_count = 1,
+                .p_attachments = @alignCast(@ptrCast(&
+                    vk.PipelineColorBlendAttachmentState {
+                        .color_blend_op = vk.BlendOp.add,
+                        .src_color_blend_factor = .zero,
+                        .dst_color_blend_factor = .zero,
+                        .src_alpha_blend_factor = .zero,
+                        .dst_alpha_blend_factor = .zero,
+                        .alpha_blend_op = vk.BlendOp.add,
+                        .color_write_mask = vk.ColorComponentFlags {
+                            .r_bit = true,
+                            .g_bit = true,
+                            .b_bit = true,
+                            .a_bit = true,
+                        },
+                        .blend_enable = vk.FALSE,
+                    },
+                )),
+            },
             .p_next = &vk.PipelineRenderingCreateInfoKHR {
-                .color_attachment_count = 0,
+                .color_attachment_count = 1,
+                .p_color_attachment_formats = @alignCast(@ptrCast(&.{format})),
                 .depth_attachment_format = vk.Format.undefined,
                 .stencil_attachment_format = vk.Format.undefined,
                 .view_mask = 0,

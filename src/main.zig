@@ -47,6 +47,11 @@ pub fn main() !void {
 
     const chunk = worldgen.Chunk.generate(0, 0);
     const vertices, const indices, const block_ids = try chunk.toMesh(arena);
+
+    // Triangul
+    //const vertices: []const Vec3f = &.{ .{ -0.8, 0.8, 0.0 }, .{ 0.8, 0.8, 0.0 }, .{ 0.0, -0.8, 0.0 } };
+    //const indices: []const u32 = &.{ 0, 1, 2 };
+
     const vertex_buffer_size = @sizeOf(Vec3f) * vertices.len;
     const index_buffer_size = @sizeOf(u32) * indices.len;
 
