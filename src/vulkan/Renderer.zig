@@ -12,6 +12,7 @@ views: []vk.ImageView,
 frames: []Frame,
 pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
+vertex_staging_buffer: Buffer,
 vertex_buffer: Buffer,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
@@ -26,7 +27,7 @@ const preferred_surface_format = vk.SurfaceFormatKHR{
 
 const max_frames_in_flight: u32 = 2;
 
-const default_mesh_buffer_size: usize = 64 * @sizeOf(Vec3f);
+const default_vertex_buffer_size: usize = 64 * @sizeOf(Vec3f);
 
 pub fn init(
     allocator: Allocator,
@@ -136,10 +137,38 @@ pub fn init(
     self.pipeline_layout, self.pipeline = try createPipeline(ctx.device);
     errdefer destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
 
+    self.vertex_staging_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = default_vertex_buffer_size,
+            .sharing_mode = .exclusive,
+            .usage = .{ .transfer_src_bit = true },
+        },
+        .{
+            .host_visible_bit = true,
+            .host_coherent_bit = true,
+        },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.vertex_staging_buffer);
+
+    self.vertex_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = default_vertex_buffer_size,
+            .sharing_mode = .exclusive,
+            .usage = .{
+                .transfer_dst_bit = true,
+                .vertex_buffer_bit = true,
+            },
+        },
+        .{ .device_local_bit = true },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.vertex_buffer);
+
     return self;
 }
 
 pub fn deinit(self: Self, ctx: Context) void {
+    self.vk_allocator.destroyBuffer(self.vertex_buffer);
+    self.vk_allocator.destroyBuffer(self.vertex_staging_buffer);
     destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
     destroyFrames(self.allocator, self.vk_allocator, ctx.device, self.frames);
     ctx.device.destroyCommandPool(self.command_pool, null);
@@ -353,28 +382,6 @@ fn createFrames(
     const frames = try allocator.alloc(Frame, count);
     var ok = true;
 
-    const vertex_staging_buffer_properties = vk.MemoryPropertyFlags{
-        .host_visible_bit = true,
-        .host_coherent_bit = true,
-    };
-    const vertex_staging_buffer_info = vk.BufferCreateInfo{
-        .size = default_mesh_buffer_size,
-        .sharing_mode = .exclusive,
-        .usage = .{ .transfer_src_bit = true },
-    };
-
-    const vertex_buffer_properties = vk.MemoryPropertyFlags{
-        .device_local_bit = true,
-    };
-    const vertex_buffer_info = vk.BufferCreateInfo{
-        .size = default_mesh_buffer_size,
-        .sharing_mode = .exclusive,
-        .usage = .{
-            .transfer_dst_bit = true,
-            .vertex_buffer_bit = true,
-        },
-    };
-
     for (frames, command_buffers) |*frame, command_buffer| {
         const fence_info = vk.FenceCreateInfo{
             .flags = .{ .signaled_bit = true },
@@ -396,22 +403,6 @@ fn createFrames(
                 log.err("failed to create semaphore: {!}", .{e});
                 break :blk vk.Semaphore.null_handle;
             },
-            .vertex_staging_buffer = vk_allocator.createBuffer(
-                vertex_staging_buffer_info,
-                vertex_staging_buffer_properties,
-            ) catch |e| {
-                ok = false;
-                log.err("failed to create vertex staging buffer: {!}", .{e});
-                @panic("todo"); // TODO: Need some stub value for buffer.
-            },
-            .vertex_buffer = vk_allocator.createBuffer(
-                vertex_buffer_info,
-                vertex_buffer_properties,
-            ) catch |e| {
-                ok = false;
-                log.err("failed to create vertex buffer: {!}", .{e});
-                @panic("todo"); // TODO: Need some stub value for buffer.
-            },
         };
     }
 
@@ -429,9 +420,8 @@ fn destroyFrames(
     device: Device,
     frames: []Frame,
 ) void {
+    _ = vk_allocator; // TODO: Need later for ubo
     for (frames) |frame| {
-        vk_allocator.destroyBuffer(frame.vertex_buffer);
-        vk_allocator.destroyBuffer(frame.vertex_staging_buffer);
         device.destroyFence(frame.in_flight, null);
         device.destroySemaphore(frame.image_acquired, null);
         device.destroySemaphore(frame.render_finished, null);
@@ -448,8 +438,20 @@ const Frame = struct {
     command_buffer: vk.CommandBuffer,
     image: vk.Image = vk.Image.null_handle,
     view: vk.ImageView = vk.ImageView.null_handle,
-    vertex_staging_buffer: Buffer,
-    vertex_buffer: Buffer,
+
+    pub fn stage_vertex_data(
+        self: Frame,
+        vk_allocator: *vulkan.Allocator,
+        data: []const Vec3f,
+    ) !void {
+        debug.assert(data.len * @sizeOf(Vec3f) <= default_vertex_buffer_size); // TODO: Implement growing
+
+        const allocation = self.vertex_staging_buffer.allocation;
+        const buffer_data_ptr: [*]Vec3f = @alignCast(@ptrCast(try vk_allocator.map(allocation)));
+        defer vk_allocator.unmap(allocation); // TODO: Persistent map?
+
+        mem.copyForwards(Vec3f, buffer_data_ptr[0..data.len], data);
+    }
 };
 
 const vulkan = @import("../vulkan.zig");

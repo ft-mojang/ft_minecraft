@@ -182,7 +182,87 @@ pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
     );
 }
 
-const CmdTransitionImageLayoutOptions = struct {
+pub fn createCommandBuffer(device: Device, pool: vk.CommandPool) !vk.CommandBuffer {
+    var command_buffer = vk.CommandBuffer.null_handle;
+
+    try device.allocateCommandBuffers(
+        &vk.CommandBufferAllocateInfo{
+            .command_pool = pool,
+            .level = vk.CommandBufferLevel.primary,
+            .command_buffer_count = 1,
+        },
+        @alignCast(@ptrCast(&command_buffer)),
+    );
+
+    return command_buffer;
+}
+
+pub fn destroyCommandBuffer(device: Device, pool: vk.CommandPool, buffer: vk.CommandBuffer) void {
+    device.freeCommandBuffers(pool, 1, @alignCast(@ptrCast(&buffer)));
+}
+
+pub fn cmdCopySimpleBuffer(ctx: Context, command_buffer: vk.CommandBuffer, src: vk.Buffer, dst: vk.Buffer, size: vk.DeviceSize) void {
+    const region_count = 1;
+    ctx.device.cmdCopyBuffer(
+        command_buffer,
+        src,
+        dst,
+        region_count,
+        @alignCast(@ptrCast(&.{
+            .src_offset = 0,
+            .dst_offset = 0,
+            .size = size,
+        })),
+    );
+}
+
+pub const CommandBufferSingleUse = struct {
+    device: Device,
+    pool: vk.CommandPool,
+    vk_handle: vk.CommandBuffer,
+
+    pub fn create(device: Device, pool: vk.CommandPool) !CommandBufferSingleUse {
+        var self: CommandBufferSingleUse = undefined;
+        self.vk_handle = try createCommandBuffer(device, pool);
+        errdefer destroyCommandBuffer(device, pool, self.vk_handle);
+        self.pool = pool;
+
+        try device.beginCommandBuffer(self.vk_handle, &.{});
+        return self;
+    }
+
+    pub fn submitAndDestroy(self: *CommandBufferSingleUse, queue: vk.Queue) !void {
+        debug.assert(self.vk_handle != .null_handle);
+
+        var err: ?anyerror = null;
+
+        if (self.device.endCommandBuffer(self.vk_handle)) {
+            const submit_count = 1;
+            self.device.queueSubmit(
+                queue,
+                submit_count,
+                @alignCast(@ptrCast(&vk.SubmitInfo{
+                    .command_buffer_count = 1,
+                    .p_command_buffers = @alignCast(@ptrCast(&self.vk_handle)),
+                })),
+                vk.Fence.null_handle,
+            ) catch |e| {
+                err = e;
+            };
+        } else |e| {
+            err = e;
+        }
+
+        destroyCommandBuffer(self.device, self.pool, self.vk_handle);
+        self.vk_handle = .null_handle;
+
+        if (err) |e| {
+            return e;
+        }
+    }
+};
+
+pub const CmdTransitionImageLayoutOptions = struct {
     device: Device,
     command_buffer: vk.CommandBuffer,
     image: vk.Image,
@@ -200,6 +280,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 const mem = std.mem;
 const log = std.log.scoped(.vulkan);
+const debug = std.debug;
 
 pub const vk = @import("vulkan");
 pub const BaseDispatch = vk.BaseWrapper(apis);
