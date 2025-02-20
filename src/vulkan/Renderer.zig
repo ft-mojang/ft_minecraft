@@ -14,8 +14,11 @@ pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 vertex_staging_buffer: Buffer,
 vertex_buffer: Buffer,
+vertex_buffer_size: vk.DeviceSize,
+vertices: []const Vec3f,
 index_staging_buffer: Buffer, // TODO: Share with vertex buffer?
 index_buffer: Buffer,
+indices: []const u32,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -33,12 +36,14 @@ pub fn init(
     allocator: Allocator,
     vk_allocator: *vulkan.Allocator,
     ctx: Context,
-    vertex_buffer_size: vk.DeviceSize, // TODO:Impl growing instead
-    index_buffer_size: vk.DeviceSize, // TODO:Impl growing instead
+    vertices: []const Vec3f,
+    indices: []const u32,
 ) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
     self.vk_allocator = vk_allocator;
+    self.vertices = vertices;
+    self.indices = indices;
     const capabilities = try ctx.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
         ctx.physical_device,
         ctx.surface,
@@ -141,7 +146,7 @@ pub fn init(
 
     self.vertex_staging_buffer = try self.vk_allocator.createBuffer(
         .{
-            .size = vertex_buffer_size,
+            .size = @sizeOf(Vec3f) * vertices.len,
             .sharing_mode = .exclusive,
             .usage = .{ .transfer_src_bit = true },
         },
@@ -154,7 +159,7 @@ pub fn init(
 
     self.vertex_buffer = try self.vk_allocator.createBuffer(
         .{
-            .size = vertex_buffer_size,
+            .size = @sizeOf(Vec3f) * vertices.len,
             .sharing_mode = .exclusive,
             .usage = .{
                 .transfer_dst_bit = true,
@@ -167,7 +172,7 @@ pub fn init(
 
     self.index_staging_buffer = try self.vk_allocator.createBuffer(
         .{
-            .size = index_buffer_size,
+            .size = @sizeOf(u32) * indices.len,
             .sharing_mode = .exclusive,
             .usage = .{ .transfer_src_bit = true },
         },
@@ -180,11 +185,11 @@ pub fn init(
 
     self.index_buffer = try self.vk_allocator.createBuffer(
         .{
-            .size = index_buffer_size,
+            .size = @sizeOf(u32) * indices.len,
             .sharing_mode = .exclusive,
             .usage = .{
                 .transfer_dst_bit = true,
-                .vertex_buffer_bit = true,
+                .index_buffer_bit = true,
             },
         },
         .{ .device_local_bit = true },

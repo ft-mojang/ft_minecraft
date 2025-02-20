@@ -50,7 +50,7 @@ pub fn main() !void {
     const vertex_buffer_size = @sizeOf(Vec3f) * vertices.len;
     const index_buffer_size = @sizeOf(u32) * indices.len;
 
-    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx, vertex_buffer_size, index_buffer_size);
+    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx, vertices, indices);
     defer renderer.deinit(vk_ctx);
 
     try vk_allocator.copySliceToAllocation(Vec3f, vertices, renderer.vertex_staging_buffer.allocation);
@@ -128,13 +128,13 @@ fn render(
     try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
     try ctx.device.beginCommandBuffer(frame.command_buffer, &.{});
 
-    vulkan.cmdTransitionImageLayout(.{
-        .device = ctx.device,
-        .command_buffer = frame.command_buffer,
-        .image = frame.image,
-        .old_layout = .undefined,
-        .new_layout = .present_src_khr,
-    });
+    //vulkan.cmdTransitionImageLayout(.{
+    //    .device = ctx.device,
+    //    .command_buffer = frame.command_buffer,
+    //    .image = frame.image,
+    //    .old_layout = .undefined,
+    //    .new_layout = .present_src_khr,
+    //});
 
     ctx.device.cmdBeginRenderingKHR(
         frame.command_buffer,
@@ -145,22 +145,65 @@ fn render(
             },
             .view_mask = 0,
             .layer_count = 1,
-            //.color_attachment_count = 1,
-            //.p_color_attachments = @alignCast(@ptrCast(&.{
-            //    vk.RenderingAttachmentInfoKHR {
-            //        .image_view = frame.view,
-            //        .image_layout = .present_src_khr,
-            //        .resolve_image_layout = .present_src_khr,
-            //        .resolve_mode = .{},
-            //        .load_op = .clear,
-            //        .store_op = .store,
-            //        .clear_value = vk.ClearValue {
-            //            .color = .{ .float_32 = .{0.0, 0.0, 0.0, 0.0} },
-            //        },
-            //    },
-            //})),
+            .color_attachment_count = 1,
+            .p_color_attachments = @alignCast(@ptrCast(&.{
+                vk.RenderingAttachmentInfoKHR{
+                    .image_view = frame.view,
+                    .image_layout = vk.ImageLayout.shader_read_only_optimal,
+                    .resolve_mode = .{},
+                    .resolve_image_layout = .undefined,
+                    .load_op = .clear,
+                    .store_op = .store,
+                    .clear_value = vk.ClearValue{
+                        .color = .{ .float_32 = .{ 0.0, 0.0, 0.0, 0.0 } },
+                    },
+                },
+            })),
         },
     );
+
+    ctx.device.cmdBindPipeline(frame.command_buffer, .graphics, renderer.pipeline);
+
+    ctx.device.cmdSetScissor(
+        frame.command_buffer,
+        0,
+        1,
+        &.{vk.Rect2D{
+            .offset = .{ .x = 0, .y = 0 },
+            .extent = renderer.extent,
+        }},
+    );
+
+    ctx.device.cmdSetViewport(
+        frame.command_buffer,
+        0,
+        1,
+        &.{vk.Viewport{
+            .x = 0,
+            .y = 0,
+            .width = @floatFromInt(renderer.extent.width),
+            .height = @floatFromInt(renderer.extent.height),
+            .min_depth = 0,
+            .max_depth = 0,
+        }},
+    );
+
+    ctx.device.cmdBindVertexBuffers(
+        frame.command_buffer,
+        0,
+        1,
+        &.{renderer.vertex_buffer.vk_handle},
+        &.{0},
+    );
+
+    ctx.device.cmdBindIndexBuffer(
+        frame.command_buffer,
+        renderer.index_buffer.vk_handle,
+        0,
+        .uint32,
+    );
+
+    ctx.device.cmdDrawIndexed(frame.command_buffer, @truncate(renderer.indices.len), 1, 0, 0, 0);
 
     ctx.device.cmdEndRenderingKHR(frame.command_buffer);
     try ctx.device.endCommandBuffer(frame.command_buffer);
