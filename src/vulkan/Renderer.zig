@@ -14,6 +14,8 @@ pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 vertex_staging_buffer: Buffer,
 vertex_buffer: Buffer,
+index_staging_buffer: Buffer, // TODO: Share with vertex buffer?
+index_buffer: Buffer,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -31,7 +33,8 @@ pub fn init(
     allocator: Allocator,
     vk_allocator: *vulkan.Allocator,
     ctx: Context,
-    vertex_buffer_size: vk.DeviceSize,
+    vertex_buffer_size: vk.DeviceSize, // TODO:Impl growing instead
+    index_buffer_size: vk.DeviceSize, // TODO:Impl growing instead
 ) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
@@ -162,10 +165,38 @@ pub fn init(
     );
     errdefer self.vk_allocator.destroyBuffer(self.vertex_buffer);
 
+    self.index_staging_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = index_buffer_size,
+            .sharing_mode = .exclusive,
+            .usage = .{ .transfer_src_bit = true },
+        },
+        .{
+            .host_visible_bit = true,
+            .host_coherent_bit = true,
+        },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.index_staging_buffer);
+
+    self.index_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = index_buffer_size,
+            .sharing_mode = .exclusive,
+            .usage = .{
+                .transfer_dst_bit = true,
+                .vertex_buffer_bit = true,
+            },
+        },
+        .{ .device_local_bit = true },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.index_buffer);
+
     return self;
 }
 
 pub fn deinit(self: Self, ctx: Context) void {
+    self.vk_allocator.destroyBuffer(self.index_buffer);
+    self.vk_allocator.destroyBuffer(self.index_staging_buffer);
     self.vk_allocator.destroyBuffer(self.vertex_buffer);
     self.vk_allocator.destroyBuffer(self.vertex_staging_buffer);
     destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);

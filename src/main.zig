@@ -48,11 +48,13 @@ pub fn main() !void {
     const chunk = worldgen.Chunk.generate(0, 0);
     const vertices, const indices, const block_ids = try chunk.toMesh(arena);
     const vertex_buffer_size = @sizeOf(Vec3f) * vertices.len;
+    const index_buffer_size = @sizeOf(u32) * indices.len;
 
-    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx, vertex_buffer_size);
+    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx, vertex_buffer_size, index_buffer_size);
     defer renderer.deinit(vk_ctx);
 
     try vk_allocator.copySliceToAllocation(Vec3f, vertices, renderer.vertex_staging_buffer.allocation);
+    try vk_allocator.copySliceToAllocation(u32, indices, renderer.index_staging_buffer.allocation);
 
     var cmd_buf_single_use = try CommandBufferSingleUse.create(vk_ctx.device, renderer.command_pool);
     vk_ctx.device.cmdCopyBuffer(
@@ -66,9 +68,19 @@ pub fn main() !void {
             .dst_offset = 0,
         })),
     );
+    vk_ctx.device.cmdCopyBuffer(
+        cmd_buf_single_use.vk_handle,
+        renderer.index_staging_buffer.vk_handle,
+        renderer.index_buffer.vk_handle,
+        1,
+        @alignCast(@ptrCast(&vk.BufferCopy{
+            .size = index_buffer_size,
+            .src_offset = 0,
+            .dst_offset = 0,
+        })),
+    );
     try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
 
-    _ = indices;
     _ = block_ids;
 
     const max_updates_per_loop = 8;
