@@ -42,16 +42,50 @@ pub fn main() !void {
     var vk_ctx = try vulkan.Context.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
 
-    var renderer = try vulkan.Renderer.init(arena, vk_ctx);
-    defer renderer.deinit(vk_ctx);
-
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
     const chunk = worldgen.Chunk.generate(0, 0);
     const vertices, const indices, const block_ids = try chunk.toMesh(arena);
-    _ = vertices;
-    _ = indices;
+
+    // Triangul
+    //const vertices: []const Vec3f = &.{ .{ -0.8, 0.8, 0.0 }, .{ 0.8, 0.8, 0.0 }, .{ 0.0, -0.8, 0.0 } };
+    //const indices: []const u32 = &.{ 0, 1, 2 };
+
+    const vertex_buffer_size = @sizeOf(Vec3f) * vertices.len;
+    const index_buffer_size = @sizeOf(u32) * indices.len;
+
+    var renderer = try vulkan.Renderer.init(arena, &vk_allocator, vk_ctx, vertices, indices);
+    defer renderer.deinit(vk_ctx);
+
+    try vk_allocator.copySliceToAllocation(Vec3f, vertices, renderer.vertex_staging_buffer.allocation);
+    try vk_allocator.copySliceToAllocation(u32, indices, renderer.index_staging_buffer.allocation);
+
+    var cmd_buf_single_use = try CommandBufferSingleUse.create(vk_ctx.device, renderer.command_pool);
+    vk_ctx.device.cmdCopyBuffer(
+        cmd_buf_single_use.vk_handle,
+        renderer.vertex_staging_buffer.vk_handle,
+        renderer.vertex_buffer.vk_handle,
+        1,
+        @alignCast(@ptrCast(&vk.BufferCopy{
+            .size = vertex_buffer_size,
+            .src_offset = 0,
+            .dst_offset = 0,
+        })),
+    );
+    vk_ctx.device.cmdCopyBuffer(
+        cmd_buf_single_use.vk_handle,
+        renderer.index_staging_buffer.vk_handle,
+        renderer.index_buffer.vk_handle,
+        1,
+        @alignCast(@ptrCast(&vk.BufferCopy{
+            .size = index_buffer_size,
+            .src_offset = 0,
+            .dst_offset = 0,
+        })),
+    );
+    try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
+
     _ = block_ids;
 
     const max_updates_per_loop = 8;
@@ -104,7 +138,7 @@ fn render(
         .command_buffer = frame.command_buffer,
         .image = frame.image,
         .old_layout = .undefined,
-        .new_layout = .present_src_khr,
+        .new_layout = .color_attachment_optimal,
     });
 
     ctx.device.cmdBeginRenderingKHR(
@@ -116,24 +150,76 @@ fn render(
             },
             .view_mask = 0,
             .layer_count = 1,
-            //.color_attachment_count = 1,
-            //.p_color_attachments = @alignCast(@ptrCast(&.{
-            //    vk.RenderingAttachmentInfoKHR {
-            //        .image_view = frame.view,
-            //        .image_layout = .present_src_khr,
-            //        .resolve_image_layout = .present_src_khr,
-            //        .resolve_mode = .{},
-            //        .load_op = .clear,
-            //        .store_op = .store,
-            //        .clear_value = vk.ClearValue {
-            //            .color = .{ .float_32 = .{0.0, 0.0, 0.0, 0.0} },
-            //        },
-            //    },
-            //})),
+            .color_attachment_count = 1,
+            .p_color_attachments = @alignCast(@ptrCast(&.{
+                vk.RenderingAttachmentInfoKHR{
+                    .image_view = frame.view,
+                    .image_layout = vk.ImageLayout.color_attachment_optimal,
+                    .resolve_mode = .{},
+                    .resolve_image_layout = .undefined,
+                    .load_op = .clear,
+                    .store_op = .store,
+                    .clear_value = vk.ClearValue{
+                        .color = .{ .float_32 = .{ 0.0, 0.0, 0.0, 0.0 } },
+                    },
+                },
+            })),
         },
     );
 
+    ctx.device.cmdBindPipeline(frame.command_buffer, .graphics, renderer.pipeline);
+
+    ctx.device.cmdSetScissor(
+        frame.command_buffer,
+        0,
+        1,
+        &.{vk.Rect2D{
+            .offset = .{ .x = 0, .y = 0 },
+            .extent = renderer.extent,
+        }},
+    );
+
+    ctx.device.cmdSetViewport(
+        frame.command_buffer,
+        0,
+        1,
+        &.{vk.Viewport{
+            .x = 0,
+            .y = 0,
+            .width = @floatFromInt(renderer.extent.width),
+            .height = @floatFromInt(renderer.extent.height),
+            .min_depth = 0,
+            .max_depth = 0,
+        }},
+    );
+
+    ctx.device.cmdBindVertexBuffers(
+        frame.command_buffer,
+        0,
+        1,
+        &.{renderer.vertex_buffer.vk_handle},
+        &.{0},
+    );
+
+    ctx.device.cmdBindIndexBuffer(
+        frame.command_buffer,
+        renderer.index_buffer.vk_handle,
+        0,
+        .uint32,
+    );
+
+    ctx.device.cmdDrawIndexed(frame.command_buffer, @truncate(renderer.indices.len), 1, 0, 0, 0);
+
     ctx.device.cmdEndRenderingKHR(frame.command_buffer);
+
+    vulkan.cmdTransitionImageLayout(.{
+        .device = ctx.device,
+        .command_buffer = frame.command_buffer,
+        .image = frame.image,
+        .old_layout = .color_attachment_optimal,
+        .new_layout = .present_src_khr,
+    });
+
     try ctx.device.endCommandBuffer(frame.command_buffer);
     try renderer.submitAndPresentAcquiredFrame(ctx);
 }
@@ -144,11 +230,13 @@ fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
 
 const vulkan = @import("vulkan.zig");
 const worldgen = @import("worldgen.zig");
+const CommandBufferSingleUse = vulkan.CommandBufferSingleUse;
 
 const std = @import("std");
-const log = std.log;
+const log = std.log.scoped(.main);
 const heap = std.heap;
 
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 const zm = @import("zm");
+const Vec3f = zm.Vec3f;

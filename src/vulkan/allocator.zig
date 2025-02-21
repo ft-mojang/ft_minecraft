@@ -119,6 +119,27 @@ pub const Allocator = struct {
             else => debug.panic("unimplemented", .{}),
         };
     }
+
+    pub fn getSize(self: Self, allocation: Allocation) vk.DeviceSize {
+        return switch (allocation.kind) {
+            .dedicated => self.dedicated.getAllocation(allocation.index).size,
+            else => debug.panic("unimplemented", .{}),
+        };
+    }
+
+    pub fn copySliceToAllocation(
+        self: Self,
+        comptime T: type,
+        slice: []const T,
+        allocation: Allocation,
+    ) !void {
+        debug.assert(self.getSize(allocation) >= @sizeOf(T) * slice.len);
+
+        const data_ptr: [*]T = @alignCast(@ptrCast(try self.map(allocation)));
+        defer self.unmap(allocation);
+
+        mem.copyForwards(T, data_ptr[0..slice.len], slice);
+    }
 };
 
 /// An index to an allocation.

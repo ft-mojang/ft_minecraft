@@ -1,4 +1,5 @@
 allocator: Allocator,
+vk_allocator: *vulkan.Allocator,
 command_pool: vk.CommandPool,
 surface_format: vk.SurfaceFormatKHR,
 present_mode: vk.PresentModeKHR,
@@ -11,6 +12,13 @@ views: []vk.ImageView,
 frames: []Frame,
 pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
+vertex_staging_buffer: Buffer,
+vertex_buffer: Buffer,
+vertex_buffer_size: vk.DeviceSize,
+vertices: []const Vec3f,
+index_staging_buffer: Buffer, // TODO: Share with vertex buffer?
+index_buffer: Buffer,
+indices: []const u32,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -26,10 +34,16 @@ const max_frames_in_flight: u32 = 2;
 
 pub fn init(
     allocator: Allocator,
+    vk_allocator: *vulkan.Allocator,
     ctx: Context,
+    vertices: []const Vec3f,
+    indices: []const u32,
 ) !Self {
     var self: Self = undefined;
     self.allocator = allocator;
+    self.vk_allocator = vk_allocator;
+    self.vertices = vertices;
+    self.indices = indices;
     const capabilities = try ctx.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(
         ctx.physical_device,
         ctx.surface,
@@ -125,17 +139,73 @@ pub fn init(
     );
     errdefer ctx.device.destroyCommandPool(self.command_pool, null);
 
-    self.frames = try createFrames(allocator, ctx.device, self.command_pool, max_frames_in_flight);
+    self.frames = try createFrames(allocator, vk_allocator, ctx.device, self.command_pool, max_frames_in_flight);
 
-    self.pipeline_layout, self.pipeline = try createPipeline(ctx.device);
+    self.pipeline_layout, self.pipeline = try createPipeline(ctx.device, self.surface_format.format);
     errdefer destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
+
+    self.vertex_staging_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = @sizeOf(Vec3f) * vertices.len,
+            .sharing_mode = .exclusive,
+            .usage = .{ .transfer_src_bit = true },
+        },
+        .{
+            .host_visible_bit = true,
+            .host_coherent_bit = true,
+        },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.vertex_staging_buffer);
+
+    self.vertex_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = @sizeOf(Vec3f) * vertices.len,
+            .sharing_mode = .exclusive,
+            .usage = .{
+                .transfer_dst_bit = true,
+                .vertex_buffer_bit = true,
+            },
+        },
+        .{ .device_local_bit = true },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.vertex_buffer);
+
+    self.index_staging_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = @sizeOf(u32) * indices.len,
+            .sharing_mode = .exclusive,
+            .usage = .{ .transfer_src_bit = true },
+        },
+        .{
+            .host_visible_bit = true,
+            .host_coherent_bit = true,
+        },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.index_staging_buffer);
+
+    self.index_buffer = try self.vk_allocator.createBuffer(
+        .{
+            .size = @sizeOf(u32) * indices.len,
+            .sharing_mode = .exclusive,
+            .usage = .{
+                .transfer_dst_bit = true,
+                .index_buffer_bit = true,
+            },
+        },
+        .{ .device_local_bit = true },
+    );
+    errdefer self.vk_allocator.destroyBuffer(self.index_buffer);
 
     return self;
 }
 
 pub fn deinit(self: Self, ctx: Context) void {
+    self.vk_allocator.destroyBuffer(self.index_buffer);
+    self.vk_allocator.destroyBuffer(self.index_staging_buffer);
+    self.vk_allocator.destroyBuffer(self.vertex_buffer);
+    self.vk_allocator.destroyBuffer(self.vertex_staging_buffer);
     destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
-    destroyFrames(self.allocator, ctx.device, self.frames);
+    destroyFrames(self.allocator, self.vk_allocator, ctx.device, self.frames);
     ctx.device.destroyCommandPool(self.command_pool, null);
     vulkan.destroyImageViews(self.allocator, ctx.device, self.views);
     self.allocator.free(self.images);
@@ -204,20 +274,39 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, ctx: vulkan.Context) !void {
     // TODO: Handle out of date / suboptimal
 }
 
-fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
+fn createPipeline(device: Device, format: vk.Format) !struct { vk.PipelineLayout, vk.Pipeline } {
     const vertex_shader_code = @embedFile("shader.vert");
-    const vertex_shader = try device.createShaderModule(&vk.ShaderModuleCreateInfo{
-        .p_code = @alignCast(@ptrCast(vertex_shader_code)),
-        .code_size = vertex_shader_code.len,
-    }, null);
+    const vertex_shader = try device.createShaderModule(
+        &vk.ShaderModuleCreateInfo{
+            .p_code = @alignCast(@ptrCast(vertex_shader_code)),
+            .code_size = vertex_shader_code.len,
+        },
+        null,
+    );
     defer device.destroyShaderModule(vertex_shader, null);
 
     const fragment_shader_code = @embedFile("shader.frag");
-    const fragment_shader = try device.createShaderModule(&.{
-        .p_code = @alignCast(@ptrCast(fragment_shader_code)),
-        .code_size = fragment_shader_code.len,
-    }, null);
+    const fragment_shader = try device.createShaderModule(
+        &.{
+            .p_code = @alignCast(@ptrCast(fragment_shader_code)),
+            .code_size = fragment_shader_code.len,
+        },
+        null,
+    );
     defer device.destroyShaderModule(fragment_shader, null);
+
+    const vertex_binding_description = vk.VertexInputBindingDescription{
+        .binding = 0,
+        .stride = @sizeOf(Vec3f),
+        .input_rate = .vertex,
+    };
+
+    const vertex_attribute_description = vk.VertexInputAttributeDescription{
+        .binding = 0,
+        .location = 0,
+        .format = .r32g32b32_sfloat,
+        .offset = 0,
+    };
 
     const layout = try device.createPipelineLayout(&.{}, null);
     errdefer device.destroyPipelineLayout(layout, null);
@@ -228,27 +317,26 @@ fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
     const result = try device.createGraphicsPipelines(
         vk.PipelineCache.null_handle,
         1, // Create info count,
-        @ptrCast(&vk.GraphicsPipelineCreateInfo{
+        @alignCast(@ptrCast(&vk.GraphicsPipelineCreateInfo{
             .layout = layout,
-            .p_viewport_state = @ptrCast(&vk.PipelineViewportStateCreateInfo{
+            .p_viewport_state = &vk.PipelineViewportStateCreateInfo{
                 .viewport_count = 1,
                 .scissor_count = 1,
-            }),
-            .p_dynamic_state = @ptrCast(&vk.PipelineDynamicStateCreateInfo {
+            },
+            .p_dynamic_state = &vk.PipelineDynamicStateCreateInfo {
                 .dynamic_state_count = 2,
                 .p_dynamic_states = &.{
                     vk.DynamicState.viewport,
                     vk.DynamicState.scissor,
-                    vk.DynamicState.vertex_input_ext,
                 },
-            }),
+            },
             .subpass = 0,
             .base_pipeline_index = 0,
             .p_vertex_input_state = &vk.PipelineVertexInputStateCreateInfo {
-                .vertex_binding_description_count = 0,
-                .p_vertex_binding_descriptions = null,
-                .vertex_attribute_description_count = 0,
-                .p_vertex_attribute_descriptions = null,
+                .vertex_binding_description_count = 1,
+                .p_vertex_binding_descriptions = @alignCast(@ptrCast(&vertex_binding_description)),
+                .vertex_attribute_description_count = 1,
+                .p_vertex_attribute_descriptions = @alignCast(@ptrCast(&vertex_attribute_description)),
             },
             .p_input_assembly_state = &vk.PipelineInputAssemblyStateCreateInfo {
                 .topology = .triangle_list,
@@ -280,20 +368,44 @@ fn createPipeline(device: Device) !struct { vk.PipelineLayout, vk.Pipeline } {
                 .depth_bias_clamp = 0.0,
                 .depth_bias_constant_factor = 0.0,
                 .depth_bias_enable = vk.FALSE,
-                .front_face = .clockwise,
+                .front_face = .counter_clockwise,
                 .polygon_mode = .fill,
                 .rasterizer_discard_enable = vk.FALSE,
                 .depth_clamp_enable = vk.FALSE,
             },
-            .p_next = @alignCast(@ptrCast(&vk.PipelineRenderingCreateInfoKHR {
-                .color_attachment_count = 0,
+            .p_color_blend_state = &vk.PipelineColorBlendStateCreateInfo{
+                .logic_op_enable = vk.FALSE,
+                .logic_op = .xor,
+                .blend_constants = .{0.0, 0.0, 0.0, 0.0},
+                .attachment_count = 1,
+                .p_attachments = @alignCast(@ptrCast(&
+                    vk.PipelineColorBlendAttachmentState {
+                        .color_blend_op = vk.BlendOp.add,
+                        .src_color_blend_factor = .zero,
+                        .dst_color_blend_factor = .zero,
+                        .src_alpha_blend_factor = .zero,
+                        .dst_alpha_blend_factor = .zero,
+                        .alpha_blend_op = vk.BlendOp.add,
+                        .color_write_mask = vk.ColorComponentFlags {
+                            .r_bit = true,
+                            .g_bit = true,
+                            .b_bit = true,
+                            .a_bit = true,
+                        },
+                        .blend_enable = vk.FALSE,
+                    },
+                )),
+            },
+            .p_next = &vk.PipelineRenderingCreateInfoKHR {
+                .color_attachment_count = 1,
+                .p_color_attachment_formats = @alignCast(@ptrCast(&.{format})),
                 .depth_attachment_format = vk.Format.undefined,
                 .stencil_attachment_format = vk.Format.undefined,
                 .view_mask = 0,
-            }))
-        }),
+            }
+        })),
         null,
-        @ptrCast(&pipeline),
+        @alignCast(@ptrCast(&pipeline)),
     );
     // zig fmt: on
     errdefer device.destroyPipeline(pipeline, null);
@@ -307,7 +419,13 @@ fn destroyPipeline(device: Device, layout: vk.PipelineLayout, pipeline: vk.Pipel
     device.destroyPipelineLayout(layout, null);
 }
 
-fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPool, count: u32) ![]Frame {
+fn createFrames(
+    allocator: Allocator,
+    vk_allocator: *vulkan.Allocator,
+    device: Device,
+    command_pool: vk.CommandPool,
+    count: u32,
+) ![]Frame {
     const command_buffers = try allocator.alloc(vk.CommandBuffer, count);
     defer allocator.free(command_buffers);
     try device.allocateCommandBuffers(
@@ -350,11 +468,17 @@ fn createFrames(allocator: Allocator, device: Device, command_pool: vk.CommandPo
         return frames;
     }
 
-    destroyFrames(allocator, device, frames);
+    destroyFrames(allocator, vk_allocator, device, frames);
     return error.FailedToCreateFrames;
 }
 
-fn destroyFrames(allocator: Allocator, device: Device, frames: []Frame) void {
+fn destroyFrames(
+    allocator: Allocator,
+    vk_allocator: *vulkan.Allocator,
+    device: Device,
+    frames: []Frame,
+) void {
+    _ = vk_allocator; // TODO: Need later for ubo
     for (frames) |frame| {
         device.destroyFence(frame.in_flight, null);
         device.destroySemaphore(frame.image_acquired, null);
@@ -377,10 +501,11 @@ const Frame = struct {
 const vulkan = @import("../vulkan.zig");
 const Context = vulkan.Context;
 const Device = vulkan.Device;
+const Buffer = vulkan.vk_allocator.Buffer;
 
 const builtin = @import("builtin");
 const std = @import("std");
-const log = std.log.scoped(.vulkan);
+const log = std.log.scoped(.vulkan_renderer);
 const debug = std.debug;
 const mem = std.mem;
 const math = std.math;
@@ -388,3 +513,5 @@ const meta = std.meta;
 const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
+const zm = @import("zm");
+const Vec3f = zm.Vec3f;
