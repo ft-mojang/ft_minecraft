@@ -19,6 +19,9 @@ vertices: []const Vec3f,
 index_staging_buffer: Buffer, // TODO: Share with vertex buffer?
 index_buffer: Buffer,
 indices: []const u32,
+descriptor_pool: vk.DescriptorPool,
+descriptor_set_layout: vk.DescriptorSetLayout,
+descriptor_set: vk.DescriptorSet,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -196,10 +199,29 @@ pub fn init(
     );
     errdefer self.vk_allocator.destroyBuffer(self.index_buffer);
 
+    self.descriptor_pool = try ctx.device.createDescriptorPool(
+        &vk.DescriptorPoolCreateInfo{
+            .flags = .{},
+            .max_sets = 1,
+            .pool_size_count = 1,
+            .p_pool_sizes = &.{vk.DescriptorPoolSize{
+                .type = .uniform_buffer,
+                .descriptor_count = 1,
+            }},
+        },
+        null,
+    );
+    errdefer ctx.device.destroyDescriptorPool(self.descriptor_pool, null);
+
+    self.descriptor_set_layout, self.descriptor_set = try createDescriptorSets(ctx.device, self.descriptor_pool);
+    errdefer destroyDescriptorSets(ctx.device, self.descriptor_set_layout, self.descriptor_pool);
+
     return self;
 }
 
 pub fn deinit(self: Self, ctx: Context) void {
+    destroyDescriptorSets(ctx.device, self.descriptor_set_layout, self.descriptor_pool);
+    ctx.device.destroyDescriptorPool(self.descriptor_pool, null);
     self.vk_allocator.destroyBuffer(self.index_buffer);
     self.vk_allocator.destroyBuffer(self.index_staging_buffer);
     self.vk_allocator.destroyBuffer(self.vertex_buffer);
@@ -487,6 +509,45 @@ fn destroyFrames(
     allocator.free(frames);
 }
 
+fn createDescriptorSets(
+    device: Device,
+    pool: vk.DescriptorPool,
+) !struct { vk.DescriptorSetLayout, vk.DescriptorSet } {
+    const ubo_binding = vk.DescriptorSetLayoutBinding{
+        .binding = 0,
+        .descriptor_type = .uniform_buffer,
+        .stage_flags = .{
+            .vertex_bit = true,
+            .fragment_bit = true,
+        },
+        .descriptor_count = 1,
+    };
+
+    const layout = try device.createDescriptorSetLayout(&vk.DescriptorSetLayoutCreateInfo{
+        .flags = .{},
+        .binding_count = 1,
+        .p_bindings = @alignCast(@ptrCast(&ubo_binding)),
+    }, null);
+
+    var descriptor_set = vk.DescriptorSet.null_handle;
+
+    try device.allocateDescriptorSets(
+        &vk.DescriptorSetAllocateInfo{
+            .descriptor_pool = pool,
+            .descriptor_set_count = 1,
+            .p_set_layouts = @alignCast(@ptrCast(&layout)),
+        },
+        @alignCast(@ptrCast(&descriptor_set)),
+    );
+
+    return .{ layout, descriptor_set };
+}
+
+fn destroyDescriptorSets(device: Device, layout: vk.DescriptorSetLayout, pool: vk.DescriptorPool) void {
+    device.destroyDescriptorPool(pool, null);
+    device.destroyDescriptorSetLayout(layout, null);
+}
+
 const Self = @This();
 
 const Frame = struct {
@@ -502,6 +563,7 @@ const vulkan = @import("../vulkan.zig");
 const Context = vulkan.Context;
 const Device = vulkan.Device;
 const Buffer = vulkan.vk_allocator.Buffer;
+const UniformBufferObject = @import("../ubo.zig").UniformBufferObject;
 
 const builtin = @import("builtin");
 const std = @import("std");

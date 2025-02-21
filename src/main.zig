@@ -240,3 +240,4 @@ const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 const zm = @import("zm");
 const Vec3f = zm.Vec3f;
+const Mat4f = zm.Mat4f;
