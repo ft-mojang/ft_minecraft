@@ -29,8 +29,8 @@ pub const Chunk = struct {
         const seed = 0xdead;
 
         var chunk: Chunk = undefined;
-        for (0..size) |x| {
-            for (0..size) |z| {
+        for (0..size) |z| {
+            for (0..size) |x| {
                 const block_x = @as(Block.Coord, chunk_x) * size + @as(Block.Coord, @intCast(x));
                 const block_z = @as(Block.Coord, chunk_z) * size + @as(Block.Coord, @intCast(z));
                 // Sample from the block center to avoid using integer coordinates as they collapse the perlin noise algorithm.
@@ -42,7 +42,7 @@ pub const Chunk = struct {
                 const block_height = @as(Block.Coord, @intFromFloat(continentalness * 0.5 * world_height)) - 1;
                 for (0..size) |y| {
                     const block_y = @as(Block.Coord, chunk_y) * size + @as(Block.Coord, @intCast(y));
-                    chunk.blocks[(z * size + y) * size + x] = if (block_y <= block_height) .stone else .air;
+                    chunk.blocks[(z * size + x) * size + y] = if (block_y <= block_height) .stone else .air;
                 }
             }
         }
@@ -51,10 +51,10 @@ pub const Chunk = struct {
     }
 
     pub fn print(chunk: Chunk) void {
-        for (0..size) |y| {
+        for (0..size) |z| {
             for (0..size) |x| {
-                for (0..size) |z| {
-                    const block = chunk.blocks[(z * size + y) * size + x];
+                for (0..size) |y| {
+                    const block = chunk.blocks[(z * size + x) * size + y];
                     debug.print("{}", .{@intFromEnum(block)});
                 }
                 debug.print("\n", .{});
@@ -67,10 +67,10 @@ pub const Chunk = struct {
         const vertices = try allocator.alloc(Vec3f, volume * 8);
         const indices = try allocator.alloc(u32, volume * 36);
 
-        for (0..size) |x| {
-            for (0..size) |y| {
-                for (0..size) |z| {
-                    const index: u32 = @intCast((z * size + y) * size + x);
+        for (0..size) |z| {
+            for (0..size) |x| {
+                for (0..size) |y| {
+                    const index: u32 = @intCast((z * size + x) * size + y);
 
                     if (chunk.blocks[index] == .air) {
                         continue;
