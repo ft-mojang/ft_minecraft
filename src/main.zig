@@ -48,8 +48,40 @@ pub fn main() !void {
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
-    const chunk = Chunk.generate(0, 0, 0);
-    const vertices, const indices = try chunk.toMesh(arena);
+    var vertices_list = ArrayList(Vec3f).init(arena);
+    defer vertices_list.deinit();
+    var indices_list = ArrayList(u32).init(arena);
+    defer indices_list.deinit();
+
+    const world_size = 16;
+    for (0..world_size) |x| {
+        for (0..world_size) |y| {
+            for (0..world_size) |z| {
+                const chunk_x = @as(Chunk.Coord, @intCast(x)) - world_size / 2;
+                const chunk_y = @as(Chunk.Coord, @intCast(y)) - world_size / 2;
+                const chunk_z = @as(Chunk.Coord, @intCast(z)) - world_size / 2;
+                const chunk = Chunk.generate(chunk_x, chunk_y, chunk_z);
+
+                var vertices, var indices = try chunk.toMesh(arena);
+                for (vertices, 0..) |_, i| {
+                    vertices[i] += Vec3f{
+                        @floatFromInt(@as(Block.Coord, chunk_x) * Chunk.size),
+                        @floatFromInt(@as(Block.Coord, chunk_y) * Chunk.size),
+                        @floatFromInt(@as(Block.Coord, chunk_z) * Chunk.size),
+                    };
+                }
+                for (indices, 0..) |_, i| {
+                    indices[i] += @intCast(vertices_list.items.len);
+                }
+
+                try vertices_list.appendSlice(vertices);
+                try indices_list.appendSlice(indices);
+            }
+        }
+    }
+
+    const vertices = vertices_list.items;
+    const indices = indices_list.items;
 
     // Triangul
     //const vertices: []const Vec3f = &.{ .{ -0.8, 0.8, 0.0 }, .{ 0.8, 0.8, 0.0 }, .{ 0.0, -0.8, 0.0 } };
@@ -321,14 +353,16 @@ fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
 }
 
 const vulkan = @import("vulkan.zig");
-const worldgen = @import("worldgen.zig");
-const Chunk = worldgen.Chunk;
 const CommandBufferSingleUse = vulkan.CommandBufferSingleUse;
+const worldgen = @import("worldgen.zig");
+const Block = worldgen.Block;
+const Chunk = worldgen.Chunk;
 const types = @import("types.zig");
 const GameState = types.GameState;
 const Matrix4 = types.Matrix4;
 
 const std = @import("std");
+const ArrayList = std.ArrayList;
 const log = std.log.scoped(.main);
 const heap = std.heap;
 
