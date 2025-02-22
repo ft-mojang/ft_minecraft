@@ -38,6 +38,9 @@ pub fn main() !void {
     };
     defer window.destroy();
 
+    window.setInputModeCursor(.disabled);
+    window.setInputModeRawMouseMotion(true);
+
     const fn_get_proc_addr = @as(vk.PfnGetInstanceProcAddr, @ptrCast(&glfw.getInstanceProcAddress));
     var vk_ctx = try vulkan.Context.init(arena, fn_get_proc_addr, glfw_extensions, window);
     defer vk_ctx.deinit();
@@ -93,6 +96,12 @@ pub fn main() !void {
     });
     try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
 
+    var game_state = GameState{
+        .player_position = Vec3f{ 0.0, 0.0, 32.0 },
+        .player_rotation = Vec3f{ 0.0, 0.0, 0.0 },
+        .camera_forward = Vec3f{ 0.0, 0.0, 1.0 },
+    };
+
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
     var simulation_time: f64 = 0.0;
@@ -107,26 +116,62 @@ pub fn main() !void {
 
         var update_count: u8 = 0;
         while (accumulated_update_time >= fixed_time_step and update_count <= max_updates_per_loop) {
-            update(simulation_time, delta_time);
+            update(&game_state, &window, simulation_time, delta_time);
             accumulated_update_time -= fixed_time_step;
             simulation_time += fixed_time_step;
             update_count += 1;
         }
 
         const alpha = accumulated_update_time / fixed_time_step;
-        try render(vk_ctx, &renderer, alpha);
+        try render(&game_state, vk_ctx, &renderer, alpha);
 
         prev_time = curr_time;
     }
     try vk_ctx.device.deviceWaitIdle();
 }
 
-fn update(t: f64, dt: f64) void {
+// Funny temporary input impl
+var input_mouse_last = Vec2f{ 0.0, 0.0 };
+
+fn keyToAxis(window: *const glfw.Window, key: glfw.Key) f32 {
+    return if (window.getKey(key) == .press) 1.0 else 0.0;
+}
+
+fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64) void {
+    //const camera_y = zm.vec.normalize(camera_x, camera_z);
+
+    const mouse_sensitivity = 0.5;
+    const mouse_pos_glfw = window.getCursorPos();
+    const mouse_position = Vec2f{ @floatCast(mouse_pos_glfw.xpos), @floatCast(mouse_pos_glfw.ypos) };
+    const mouse_delta = zm.vec.scale(mouse_position - input_mouse_last, @as(f32, @floatCast(dt)) * mouse_sensitivity);
+    input_mouse_last = mouse_position;
+
+    state.player_rotation[0] += mouse_delta[1]; // Pitch
+    state.player_rotation[1] += mouse_delta[0]; // Yaw
+
+    state.camera_forward = zm.vec.normalize(Vec3f{
+        std.math.cos(state.player_rotation[1]) * std.math.cos(state.player_rotation[0]),
+        std.math.sin(state.player_rotation[0]),
+        std.math.sin(state.player_rotation[1]) * std.math.cos(state.player_rotation[0]),
+    });
+    const camera_right = zm.vec.normalize(zm.vec.cross(zm.vec.up(f32), state.camera_forward));
+    const camera_up = zm.vec.normalize(zm.vec.cross(state.camera_forward, camera_right));
+
+    const movement_speed: f32 = 10.0;
+    const delta_velocity = zm.vec.scale(Vec3f{
+        -keyToAxis(window, .a) + keyToAxis(window, .d),
+        -keyToAxis(window, .left_control) + keyToAxis(window, .space),
+        -keyToAxis(window, .s) + keyToAxis(window, .w),
+    }, @as(f32, @floatCast(dt)) * movement_speed);
+
+    state.player_position += zm.vec.scale(camera_right, delta_velocity[0]);
+    state.player_position += zm.vec.scale(camera_up, delta_velocity[1]);
+    state.player_position += zm.vec.scale(state.camera_forward, -delta_velocity[2]);
     _ = t;
-    _ = dt;
 }
 
 fn render(
+    game_state: *const GameState,
     ctx: vulkan.Context,
     renderer: *vulkan.Renderer,
     interpolation_alpha: f64,
@@ -136,10 +181,9 @@ fn render(
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
 
-    const eyes = Vec3f{ 8.0, 8.0, 32.0 };
     const up = Vec3f{ 0.0, 1.0, 0.0 };
-    const look_at = Vec3f{ 8.0, 8.0, 0.0 };
-    const fov_y = 45.0;
+    const look_at = game_state.player_position - game_state.camera_forward;
+    // const fov_y = 45.0;
     const width: f32 = @floatFromInt(renderer.extent.width);
     const height: f32 = @floatFromInt(renderer.extent.height);
     const aspect_ratio = width / height;
@@ -148,8 +192,8 @@ fn render(
 
     frame.uniform_buffer_mapped.* = .{
         .model = Matrix4(f32).fromMat4f(Mat4f.identity().transpose()),
-        .view = Matrix4(f32).fromMat4f(Mat4f.lookAt(eyes, look_at, up).transpose()),
-        .proj = Matrix4(f32).fromMat4f(Mat4f.perspective(fov_y, aspect_ratio, near, far).transpose()),
+        .view = Matrix4(f32).fromMat4f(Mat4f.lookAt(game_state.player_position, look_at, up).transpose()),
+        .proj = Matrix4(f32).fromMat4f(Mat4f.perspective(std.math.pi / 4.0, aspect_ratio, near, far).transpose()),
     };
     frame.uniform_buffer_mapped.proj.data[5] *= -1;
 
@@ -281,6 +325,7 @@ const worldgen = @import("worldgen.zig");
 const Chunk = worldgen.Chunk;
 const CommandBufferSingleUse = vulkan.CommandBufferSingleUse;
 const types = @import("types.zig");
+const GameState = types.GameState;
 const Matrix4 = types.Matrix4;
 
 const std = @import("std");
@@ -290,6 +335,8 @@ const heap = std.heap;
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 const zm = @import("zm");
+const Vec2f = zm.Vec2f;
 const Vec3f = zm.Vec3f;
 const Vec4f = zm.Vec4f;
 const Mat4f = zm.Mat4f;
+const Quaternion = zm.Quaternion;
