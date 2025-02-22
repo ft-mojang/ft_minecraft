@@ -189,7 +189,7 @@ pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
         .dst_access_mask = transition.dst_access_mask,
         .image = options.image,
         .subresource_range = vk.ImageSubresourceRange{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = transition.aspect_mask,
             .base_mip_level = 0,
             .level_count = 1,
             .base_array_layer = 0,

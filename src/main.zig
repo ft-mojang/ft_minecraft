@@ -84,6 +84,13 @@ pub fn main() !void {
             .dst_offset = 0,
         })),
     );
+    vulkan.cmdTransitionImageLayout(.{
+        .device = vk_ctx.device,
+        .command_buffer = cmd_buf_single_use.vk_handle,
+        .image = renderer.depth_image.vk_handle,
+        .old_layout = .undefined,
+        .new_layout = .depth_stencil_attachment_optimal,
+    });
     try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
 
     const max_updates_per_loop = 8;
@@ -180,6 +187,20 @@ fn render(
                     },
                 },
             })),
+            .p_depth_attachment = &vk.RenderingAttachmentInfoKHR{
+                .store_op = .dont_care,
+                .load_op = .clear,
+                .resolve_mode = .{},
+                .resolve_image_layout = .undefined,
+                .image_layout = .depth_stencil_attachment_optimal,
+                .image_view = renderer.depth_view,
+                .clear_value = vk.ClearValue{
+                    .depth_stencil = .{
+                        .depth = 1.0,
+                        .stencil = 0.0,
+                    },
+                },
+            },
         },
     );
 

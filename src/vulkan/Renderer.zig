@@ -477,7 +477,7 @@ fn createPipeline(
             .p_next = &vk.PipelineRenderingCreateInfoKHR {
                 .color_attachment_count = 1,
                 .p_color_attachment_formats = @alignCast(@ptrCast(&.{format})),
-                .depth_attachment_format = vk.Format.undefined,
+                .depth_attachment_format = .d32_sfloat,
                 .stencil_attachment_format = vk.Format.undefined,
                 .view_mask = 0,
             }
