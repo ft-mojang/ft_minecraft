@@ -1,55 +1,41 @@
-/// Enum variants for all unique block types.
+/// Enum variants for all unique block types
 pub const Block = enum(u8) {
     air,
     stone,
 
-    /// Valid range of block coordinates.
+    /// Valid range of block coordinates
     pub const Coord = i32;
 };
 
 pub const Chunk = struct {
     blocks: [volume]Block,
 
-    /// Side length of a chunk on the vertical y axis.
+    /// Side length of a chunk on the vertical y axis
     pub const size_y = 256;
 
-    /// Side length of a chunk on the horizontal x and z axes.
+    /// Side length of a chunk on the horizontal x and z axes
     pub const size_xz = blk: {
         const bit_width = @bitSizeOf(Block.Coord) - @bitSizeOf(Coord);
         debug.assert(bit_width > 0);
         break :blk bit_width * bit_width;
     };
 
-    /// The number of blocks in a chunk.
+    /// The number of blocks in a chunk
     pub const volume = size_xz * size_y * size_xz;
 
     pub fn generate(chunk_x: Coord, chunk_z: Coord) Chunk {
         const seed = 0xdead;
-        const octave_count = 8;
-        const octave_offset: Fp = 42.0; // Arbitrary offset to avoid interferance between octaves when near zero.
-        const persistence: Fp = 0.5;
-        const lacunarity: Fp = 2.0;
 
         var chunk: Chunk = undefined;
         for (0..size_xz) |x| {
             for (0..size_xz) |z| {
-                const block_x: Fp = @floatFromInt(@as(Block.Coord, chunk_x) * size_xz + @as(Block.Coord, @intCast(x)));
-                const block_z: Fp = @floatFromInt(@as(Block.Coord, chunk_z) * size_xz + @as(Block.Coord, @intCast(z)));
-                var amplitude: Fp = 1.0;
-                var frequency: Fp = 1.0;
-                var height_max: Fp = 0.0;
-                var height_sum: Fp = 0.0;
-                for (0..octave_count) |i| {
-                    // This additional 0.5 offset is to avoid passing integer coords to the noise function,
-                    // as that will always return a value of 0 due to grid alignment artifacts.
-                    const offset = 0.5 + octave_offset * @as(Fp, @floatFromInt(i));
-                    height_max += amplitude;
-                    height_sum += amplitude * Noise.singlePerlin2D(seed, block_x * frequency + offset, block_z * frequency + offset);
-                    amplitude *= persistence;
-                    frequency *= lacunarity;
-                }
-                const normalized_height = height_sum / height_max; // Range -1 to 1 (inclusive)
-                const block_height = @as(Block.Coord, @intFromFloat(normalized_height * size_y)) - 1;
+                // We sample from the center of blocks to avoid using integer coordinates as they collapse the perlin noise algorithm.
+                const block_x: Fp = 0.5 + @as(Fp, @floatFromInt(@as(Block.Coord, chunk_x) * size_xz + @as(Block.Coord, @intCast(x))));
+                const block_z: Fp = 0.5 + @as(Fp, @floatFromInt(@as(Block.Coord, chunk_z) * size_xz + @as(Block.Coord, @intCast(z))));
+
+                const continentalness = sampleLayeredNoise2d(seed, block_x, block_z, 1.0, 1.0, 8, 0.5, 2.0);
+
+                const block_height = @as(Block.Coord, @intFromFloat(0.5 * size_y + continentalness * 0.5 * size_y)) - 1;
                 for (0..size_y) |y| {
                     chunk.blocks[(z * size_y + y) * size_xz + x] = if (y <= block_height) .stone else .air;
                 }
@@ -140,7 +126,34 @@ pub const Chunk = struct {
         return .{ vertices, indices, block_ids };
     }
 
-    /// Valid range of chunk coordinates.
+    /// Sums octaves of noise and returns a normalized result in range -1 to 1 (inclusive)
+    fn sampleLayeredNoise2d(
+        seed: i32,
+        x: Fp,
+        y: Fp,
+        amplitude: Fp,
+        frequency: Fp,
+        octave_count: u8,
+        persistence: Fp,
+        lacunarity: Fp,
+    ) Fp {
+        // Offset to avoid interference patterns between octaves when near zero
+        const octave_offset: Fp = std.math.maxInt(@TypeOf(octave_count)) / octave_count;
+        var _amplitude: Fp = amplitude;
+        var _frequency: Fp = frequency;
+        var height_max: Fp = 0.0;
+        var height_sum: Fp = 0.0;
+        for (0..octave_count) |i| {
+            const offset = octave_offset * @as(Fp, @floatFromInt(i));
+            height_max += _amplitude;
+            height_sum += _amplitude * Noise.singleSimplexS2D(seed, _frequency * (x + offset), _frequency * (y + offset));
+            _amplitude *= persistence;
+            _frequency *= lacunarity;
+        }
+        return height_sum / height_max;
+    }
+
+    /// Valid range of chunk coordinates
     pub const Coord = i28;
 };
 
