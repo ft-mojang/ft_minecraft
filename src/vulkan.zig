@@ -131,6 +131,7 @@ pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
         dst_stage: vk.PipelineStageFlags,
         src_access_mask: vk.AccessFlags,
         dst_access_mask: vk.AccessFlags,
+        aspect_mask: vk.ImageAspectFlags = .{ .color_bit = true },
     };
 
     // Really scuffed auto formatting
@@ -157,6 +158,23 @@ pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
             .dst_stage = .{ .bottom_of_pipe_bit = true },
             .src_access_mask = .{ .color_attachment_write_bit = true },
             .dst_access_mask = .{},
+        };
+    } else if (
+    // zig fmt: off
+        options.old_layout == vk.ImageLayout.undefined and
+        options.new_layout == vk.ImageLayout.depth_stencil_attachment_optimal)
+    // zig fmt: on
+    blk: {
+        break :blk Transition{
+            .src_stage = .{ .top_of_pipe_bit = true },
+            .dst_stage = .{ .early_fragment_tests_bit = true },
+            .src_access_mask = .{},
+            .dst_access_mask = .{
+                .depth_stencil_attachment_read_bit = true,
+                .depth_stencil_attachment_write_bit = true,
+            },
+            .aspect_mask = .{ .depth_bit = true },
+            // TODO: Stencil component?
         };
     } else {
         @panic("layout transition not defined");
