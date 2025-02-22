@@ -19,6 +19,8 @@ vertices: []const Vec3f,
 index_staging_buffer: Buffer, // TODO: Share with vertex buffer?
 index_buffer: Buffer,
 indices: []const u32,
+descriptor_pool: vk.DescriptorPool,
+descriptor_set_layout: vk.DescriptorSetLayout,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -139,9 +141,34 @@ pub fn init(
     );
     errdefer ctx.device.destroyCommandPool(self.command_pool, null);
 
-    self.frames = try createFrames(allocator, vk_allocator, ctx.device, self.command_pool, max_frames_in_flight);
+    self.descriptor_set_layout = try createDescriptorSetLayout(ctx.device);
+    errdefer ctx.device.destroyDescriptorSetLayout(self.descriptor_set_layout, null);
 
-    self.pipeline_layout, self.pipeline = try createPipeline(ctx.device, self.surface_format.format);
+    self.descriptor_pool = try ctx.device.createDescriptorPool(
+        &vk.DescriptorPoolCreateInfo{
+            .flags = .{},
+            .max_sets = 2,
+            .pool_size_count = 1,
+            .p_pool_sizes = &.{vk.DescriptorPoolSize{
+                .type = .uniform_buffer,
+                .descriptor_count = 2,
+            }},
+        },
+        null,
+    );
+    errdefer ctx.device.destroyDescriptorPool(self.descriptor_pool, null);
+
+    self.frames = try createFrames(
+        allocator,
+        vk_allocator,
+        ctx.device,
+        self.command_pool,
+        self.descriptor_pool,
+        self.descriptor_set_layout,
+    );
+    errdefer destroyFrames(allocator, vk_allocator, ctx.device, self.frames);
+
+    self.pipeline_layout, self.pipeline = try createPipeline(ctx.device, self.surface_format.format, self.descriptor_set_layout);
     errdefer destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
 
     self.vertex_staging_buffer = try self.vk_allocator.createBuffer(
@@ -200,6 +227,8 @@ pub fn init(
 }
 
 pub fn deinit(self: Self, ctx: Context) void {
+    ctx.device.destroyDescriptorPool(self.descriptor_pool, null);
+    ctx.device.destroyDescriptorSetLayout(self.descriptor_set_layout, null);
     self.vk_allocator.destroyBuffer(self.index_buffer);
     self.vk_allocator.destroyBuffer(self.index_staging_buffer);
     self.vk_allocator.destroyBuffer(self.vertex_buffer);
@@ -274,7 +303,11 @@ pub fn submitAndPresentAcquiredFrame(self: *Self, ctx: vulkan.Context) !void {
     // TODO: Handle out of date / suboptimal
 }
 
-fn createPipeline(device: Device, format: vk.Format) !struct { vk.PipelineLayout, vk.Pipeline } {
+fn createPipeline(
+    device: Device,
+    format: vk.Format,
+    descriptor_set_layout: vk.DescriptorSetLayout,
+) !struct { vk.PipelineLayout, vk.Pipeline } {
     const vertex_shader_code = @embedFile("shader.vert");
     const vertex_shader = try device.createShaderModule(
         &vk.ShaderModuleCreateInfo{
@@ -308,7 +341,13 @@ fn createPipeline(device: Device, format: vk.Format) !struct { vk.PipelineLayout
         .offset = 0,
     };
 
-    const layout = try device.createPipelineLayout(&.{}, null);
+    const layout = try device.createPipelineLayout(
+        &vk.PipelineLayoutCreateInfo{
+            .set_layout_count = 1,
+            .p_set_layouts = @alignCast(@ptrCast(&descriptor_set_layout)),
+        },
+        null,
+    );
     errdefer device.destroyPipelineLayout(layout, null);
 
     var pipeline = vk.Pipeline.null_handle;
@@ -424,26 +463,76 @@ fn createFrames(
     vk_allocator: *vulkan.Allocator,
     device: Device,
     command_pool: vk.CommandPool,
-    count: u32,
+    descriptor_pool: vk.DescriptorPool,
+    descriptor_set_layout: vk.DescriptorSetLayout,
 ) ![]Frame {
-    const command_buffers = try allocator.alloc(vk.CommandBuffer, count);
+    const command_buffers = try allocator.alloc(vk.CommandBuffer, max_frames_in_flight);
     defer allocator.free(command_buffers);
     try device.allocateCommandBuffers(
         &.{
             .command_pool = command_pool,
             .level = .primary,
-            .command_buffer_count = count,
+            .command_buffer_count = max_frames_in_flight,
         },
         command_buffers.ptr,
     );
 
-    const frames = try allocator.alloc(Frame, count);
+    var layouts: [max_frames_in_flight]vk.DescriptorSetLayout = @splat(descriptor_set_layout);
+    var descriptor_sets: [max_frames_in_flight]vk.DescriptorSet = @splat(.null_handle);
+
+    try device.allocateDescriptorSets(
+        &vk.DescriptorSetAllocateInfo{
+            .descriptor_pool = descriptor_pool,
+            .descriptor_set_count = max_frames_in_flight,
+            .p_set_layouts = &layouts,
+        },
+        &descriptor_sets,
+    );
+
+    const frames = try allocator.alloc(Frame, max_frames_in_flight);
     var ok = true;
 
-    for (frames, command_buffers) |*frame, command_buffer| {
+    for (frames, command_buffers, descriptor_sets) |*frame, command_buffer, descriptor_set| {
         const fence_info = vk.FenceCreateInfo{
             .flags = .{ .signaled_bit = true },
         };
+
+        const uniform_buffer = vk_allocator.createBuffer(
+            vk.BufferCreateInfo{
+                .size = @sizeOf(UniformBufferObject),
+                .sharing_mode = .exclusive,
+                .usage = vk.BufferUsageFlags{
+                    .uniform_buffer_bit = true,
+                },
+            },
+            vk.MemoryPropertyFlags{
+                .host_visible_bit = true,
+                .host_coherent_bit = true,
+            },
+        ) catch {
+            @panic("unimplemented"); // TODO: stub value or builder
+        };
+
+        device.updateDescriptorSets(
+            1, // descriptor write count
+            &.{vk.WriteDescriptorSet{
+                .dst_set = descriptor_set,
+                .dst_binding = 0,
+                .dst_array_element = 0,
+                .descriptor_count = 1,
+                .descriptor_type = .uniform_buffer,
+                .p_buffer_info = @alignCast(@ptrCast(&vk.DescriptorBufferInfo{
+                    .buffer = uniform_buffer.vk_handle,
+                    .range = vk.WHOLE_SIZE,
+                    .offset = 0,
+                })),
+                .p_image_info = &[_]vk.DescriptorImageInfo{},
+                .p_texel_buffer_view = &[_]vk.BufferView{},
+            }},
+            0, // descriptor copy count
+            null, // descriptor copies
+        );
+
         frame.* = .{
             .command_buffer = command_buffer,
             .in_flight = device.createFence(&fence_info, null) catch |e| blk: {
@@ -461,6 +550,11 @@ fn createFrames(
                 log.err("failed to create semaphore: {!}", .{e});
                 break :blk vk.Semaphore.null_handle;
             },
+            .uniform_buffer = uniform_buffer,
+            .uniform_buffer_mapped = @alignCast(@ptrCast(
+                vk_allocator.map(uniform_buffer.allocation) catch @panic("unimplemented"),
+            )),
+            .descriptor_set = descriptor_set,
         };
     }
 
@@ -478,13 +572,36 @@ fn destroyFrames(
     device: Device,
     frames: []Frame,
 ) void {
-    _ = vk_allocator; // TODO: Need later for ubo
     for (frames) |frame| {
+        vk_allocator.unmap(frame.uniform_buffer.allocation);
+        vk_allocator.destroyBuffer(frame.uniform_buffer);
         device.destroyFence(frame.in_flight, null);
         device.destroySemaphore(frame.image_acquired, null);
         device.destroySemaphore(frame.render_finished, null);
     }
     allocator.free(frames);
+}
+
+fn createDescriptorSetLayout(
+    device: Device,
+) !vk.DescriptorSetLayout {
+    const ubo_binding = vk.DescriptorSetLayoutBinding{
+        .binding = 0,
+        .descriptor_type = .uniform_buffer,
+        .stage_flags = .{
+            .vertex_bit = true,
+            .fragment_bit = true,
+        },
+        .descriptor_count = 1,
+    };
+
+    const layout = try device.createDescriptorSetLayout(&vk.DescriptorSetLayoutCreateInfo{
+        .flags = .{},
+        .binding_count = 1,
+        .p_bindings = @alignCast(@ptrCast(&ubo_binding)),
+    }, null);
+
+    return layout;
 }
 
 const Self = @This();
@@ -496,12 +613,16 @@ const Frame = struct {
     command_buffer: vk.CommandBuffer,
     image: vk.Image = vk.Image.null_handle,
     view: vk.ImageView = vk.ImageView.null_handle,
+    descriptor_set: vk.DescriptorSet,
+    uniform_buffer: Buffer,
+    uniform_buffer_mapped: *UniformBufferObject,
 };
 
 const vulkan = @import("../vulkan.zig");
 const Context = vulkan.Context;
 const Device = vulkan.Device;
 const Buffer = vulkan.vk_allocator.Buffer;
+const UniformBufferObject = @import("../types.zig").UniformBufferObject;
 
 const builtin = @import("builtin");
 const std = @import("std");

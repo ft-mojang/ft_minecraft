@@ -130,6 +130,24 @@ fn render(
 
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
+
+    const eyes = Vec3f{ 0.0, 4.0, 0.0 };
+    const up = Vec3f{ 0.0, 1.0, 0.0 };
+    const look_at = Vec3f{ 0.0, 0.0, -1.0 };
+    const fov_y = 45.0;
+    const width: f32 = @floatFromInt(renderer.extent.width);
+    const height: f32 = @floatFromInt(renderer.extent.height);
+    const aspect_ratio = width / height;
+    const near = 1.0;
+    const far = -100.0;
+
+    frame.uniform_buffer_mapped.* = .{
+        .model = Matrix4(f32).fromMat4f(Mat4f.identity()),
+        .view = Matrix4(f32).fromMat4f(Mat4f.lookAt(eyes, look_at, up)),
+        .proj = Matrix4(f32).fromMat4f(Mat4f.perspective(fov_y, aspect_ratio, near, far)),
+    };
+    //frame.uniform_buffer_mapped.proj.data[5] *= -1;
+
     try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
     try ctx.device.beginCommandBuffer(frame.command_buffer, &.{});
 
@@ -208,6 +226,17 @@ fn render(
         .uint32,
     );
 
+    ctx.device.cmdBindDescriptorSets(
+        frame.command_buffer,
+        vk.PipelineBindPoint.graphics,
+        renderer.pipeline_layout,
+        0, // first set
+        1, // descriptor set count
+        &.{frame.descriptor_set},
+        0, // dynamic offset count
+        null, // p dynamic offsets
+    );
+
     ctx.device.cmdDrawIndexed(frame.command_buffer, @truncate(renderer.indices.len), 1, 0, 0, 0);
 
     ctx.device.cmdEndRenderingKHR(frame.command_buffer);
@@ -231,6 +260,8 @@ fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
 const vulkan = @import("vulkan.zig");
 const worldgen = @import("worldgen.zig");
 const CommandBufferSingleUse = vulkan.CommandBufferSingleUse;
+const types = @import("types.zig");
+const Matrix4 = types.Matrix4;
 
 const std = @import("std");
 const log = std.log.scoped(.main);
@@ -240,3 +271,5 @@ const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
 const zm = @import("zm");
 const Vec3f = zm.Vec3f;
+const Vec4f = zm.Vec4f;
+const Mat4f = zm.Mat4f;
