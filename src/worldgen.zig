@@ -67,8 +67,8 @@ pub const Chunk = struct {
         const vertices = try allocator.alloc(Vec3f, volume * 8);
         const indices = try allocator.alloc(u32, volume * 36);
 
-        for (0..size) |y| {
-            for (0..size) |x| {
+        for (0..size) |x| {
+            for (0..size) |y| {
                 for (0..size) |z| {
                     const index: u32 = @intCast((z * size + y) * size + x);
 
