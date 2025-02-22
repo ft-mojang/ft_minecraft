@@ -58,15 +58,18 @@ pub const Chunk = struct {
         }
     }
 
-    pub fn toMesh(chunk: Chunk, allocator: Allocator) !struct { []zm.Vec3f, []u32, []Block } {
+    pub fn toMesh(chunk: Chunk, allocator: Allocator) !struct { []zm.Vec3f, []u32 } {
         const vertices = try allocator.alloc(zm.Vec3f, volume * 8);
         const indices = try allocator.alloc(u32, volume * 36);
-        const block_ids = try allocator.alloc(Block, volume);
 
         for (0..size_y) |y| {
             for (0..size_xz) |x| {
                 for (0..size_xz) |z| {
                     const index: u32 = @intCast((z * size_y + y) * size_xz + x);
+
+                    if (chunk.blocks[index] == .air) {
+                        continue;
+                    }
 
                     const fx: f32 = @floatFromInt(x);
                     const fy: f32 = @floatFromInt(y);
@@ -117,13 +120,11 @@ pub const Chunk = struct {
                     indices[index * 36 + 33] = index * 8 + 3;
                     indices[index * 36 + 34] = index * 8 + 5;
                     indices[index * 36 + 35] = index * 8 + 1;
-
-                    block_ids[index] = chunk.blocks[index];
                 }
             }
         }
 
-        return .{ vertices, indices, block_ids };
+        return .{ vertices, indices };
     }
 
     /// Sums octaves of noise and returns a normalized result in range -1 to 1 (inclusive)

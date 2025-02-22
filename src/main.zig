@@ -46,7 +46,7 @@ pub fn main() !void {
     defer vk_allocator.deinit();
 
     const chunk = worldgen.Chunk.generate(0, 0);
-    const vertices, const indices, const block_ids = try chunk.toMesh(arena);
+    const vertices, const indices = try chunk.toMesh(arena);
 
     // Triangul
     //const vertices: []const Vec3f = &.{ .{ -0.8, 0.8, 0.0 }, .{ 0.8, 0.8, 0.0 }, .{ 0.0, -0.8, 0.0 } };
@@ -85,8 +85,6 @@ pub fn main() !void {
         })),
     );
     try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
-
-    _ = block_ids;
 
     const max_updates_per_loop = 8;
     const fixed_time_step = 1.0 / 60.0;
@@ -131,15 +129,15 @@ fn render(
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
 
-    const eyes = Vec3f{ 8.0, 8.0, 32.0 };
+    const eyes = Vec3f{ 8.0, 150.0, 128.0 };
     const up = Vec3f{ 0.0, 1.0, 0.0 };
-    const look_at = Vec3f{ 8.0, 8.0, 0.0 };
+    const look_at = Vec3f{ 8.0, 150.0, 0.0 };
     const fov_y = 45.0;
     const width: f32 = @floatFromInt(renderer.extent.width);
     const height: f32 = @floatFromInt(renderer.extent.height);
     const aspect_ratio = width / height;
     const near = 0.1;
-    const far = 100.0;
+    const far = 1000.0;
 
     frame.uniform_buffer_mapped.* = .{
         .model = Matrix4(f32).fromMat4f(Mat4f.identity().transpose()),
