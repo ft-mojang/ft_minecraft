@@ -138,7 +138,7 @@ pub const Chunk = struct {
         lacunarity: Fp,
     ) Fp {
         // Offset to avoid interference patterns between octaves when near zero
-        const octave_offset: Fp = @floatFromInt(std.math.maxInt(@TypeOf(octave_count)) / octave_count);
+        const octave_offset: Fp = @floatFromInt(math.maxInt(@TypeOf(octave_count)) / octave_count);
         var _amplitude: Fp = amplitude;
         var _frequency: Fp = frequency;
         var height_max: Fp = 0.0;
@@ -164,6 +164,7 @@ const Noise = fastnoise.Noise(Fp);
 
 const std = @import("std");
 const debug = std.debug;
+const math = std.math;
 const Allocator = std.mem.Allocator;
 
 const zm = @import("zm");
