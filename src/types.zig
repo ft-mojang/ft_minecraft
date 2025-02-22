@@ -16,7 +16,16 @@ pub const UniformBufferObject = extern struct {
     proj: Matrix4(f32) align(16),
 };
 
+pub const GameState = struct {
+    player_position: Vec3f,
+    player_rotation: Vec3f,
+    camera_forward: Vec3f,
+};
+
 const std = @import("std");
 const mem = std.mem;
 
-const Mat4f = @import("zm").Mat4f;
+const zm = @import("zm");
+const Vec3f = zm.Vec3f;
+const Vec4f = zm.Vec4f;
+const Mat4f = zm.Mat4f;
