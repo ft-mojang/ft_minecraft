@@ -758,7 +758,7 @@ pub fn Noise(comptime Float: type) type {
 
         // Domain Warp Basic Grid
 
-        fn singleDomainWarpBasicGrid2D(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, xp: *Float, yp: *Float) void {
+        pub fn singleDomainWarpBasicGrid2D(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, xp: *Float, yp: *Float) void {
             const xf = x * frequency;
             const yf = y * frequency;
 
@@ -789,7 +789,7 @@ pub fn Noise(comptime Float: type) type {
             yp.* += lerp(ly0x, ly1x, ys) * warp_amp;
         }
 
-        fn singleDomainWarpBasicGrid3D(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, z: Float, xp: *Float, yp: *Float, zp: *Float) void {
+        pub fn singleDomainWarpBasicGrid3D(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, z: Float, xp: *Float, yp: *Float, zp: *Float) void {
             const xf = x * frequency;
             const yf = y * frequency;
             const zf = z * frequency;
@@ -848,7 +848,7 @@ pub fn Noise(comptime Float: type) type {
 
         // Domain Warp Simplex/OpenSimplex2
 
-        fn singleDomainWarpSimplexGradient(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, xr: *Float, yr: *Float, out_grad: bool) void {
+        pub fn singleDomainWarpSimplexGradient(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, xr: *Float, yr: *Float, out_grad: bool) void {
             const xx = x * frequency;
             const yy = y * frequency;
 
@@ -929,7 +929,7 @@ pub fn Noise(comptime Float: type) type {
             yr.* += vy * warp_amp;
         }
 
-        fn singleDomainWarpOpenSimplex2Gradient(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, z: Float, xr: *Float, yr: *Float, zr: *Float, out_grad: bool) void {
+        pub fn singleDomainWarpOpenSimplex2Gradient(seed: i32, warp_amp: Float, frequency: Float, x: Float, y: Float, z: Float, xr: *Float, yr: *Float, zr: *Float, out_grad: bool) void {
             const xx = x * frequency;
             const yy = y * frequency;
             const zz = z * frequency;
@@ -1066,7 +1066,7 @@ pub fn Noise(comptime Float: type) type {
             return lerp(xf0, xf1, ys) * 1.4247691104677813;
         }
 
-        fn singlePerlin3D(seed: i32, x: Float, y: Float, z: Float) Float {
+        pub fn singlePerlin3D(seed: i32, x: Float, y: Float, z: Float) Float {
             var x0 = fastFloor(x);
             var y0 = fastFloor(y);
             var z0 = fastFloor(z);
@@ -1101,7 +1101,7 @@ pub fn Noise(comptime Float: type) type {
 
         // Simplex/OpenSimplex2 Noise
 
-        fn singleSimplex2D(seed: i32, x: Float, y: Float) Float {
+        pub fn singleSimplex2D(seed: i32, x: Float, y: Float) Float {
             // 2D OpenSimplex2 case uses the same algorithm as ordinary Simplex.
             var i: i32 = fastFloor(x);
             var j: i32 = fastFloor(y);
@@ -1143,7 +1143,7 @@ pub fn Noise(comptime Float: type) type {
             return (n0 + n1 + n2) * 99.83685446303647;
         }
 
-        fn singleSimplex3D(seed: i32, x: Float, y: Float, z: Float) Float {
+        pub fn singleSimplex3D(seed: i32, x: Float, y: Float, z: Float) Float {
             var i: i32 = fastRound(x);
             var j: i32 = fastRound(y);
             var k: i32 = fastRound(z);
@@ -1226,7 +1226,7 @@ pub fn Noise(comptime Float: type) type {
 
         // Value noise
 
-        fn singleValue2D(seed: i32, x: Float, y: Float) Float {
+        pub fn singleValue2D(seed: i32, x: Float, y: Float) Float {
             var x0: i32 = fastFloor(x);
             var y0: i32 = fastFloor(y);
 
@@ -1244,7 +1244,7 @@ pub fn Noise(comptime Float: type) type {
             return lerp(xf0, xf1, ys);
         }
 
-        fn singleValue3D(seed: i32, x: Float, y: Float, z: Float) Float {
+        pub fn singleValue3D(seed: i32, x: Float, y: Float, z: Float) Float {
             var x0: i32 = fastFloor(x);
             var y0: i32 = fastFloor(y);
             var z0: i32 = fastFloor(z);
@@ -1273,7 +1273,7 @@ pub fn Noise(comptime Float: type) type {
 
         // Value Cubic
 
-        fn singleValueCubic2D(seed: i32, x: Float, y: Float) Float {
+        pub fn singleValueCubic2D(seed: i32, x: Float, y: Float) Float {
             var x1: i32 = fastFloor(x);
             var y1: i32 = fastFloor(y);
 
@@ -1292,7 +1292,7 @@ pub fn Noise(comptime Float: type) type {
             return cubicLerp(cubicLerp(valCoord2D(seed, x0, y0), valCoord2D(seed, x1, y0), valCoord2D(seed, x2, y0), valCoord2D(seed, x3, y0), xs), cubicLerp(valCoord2D(seed, x0, y1), valCoord2D(seed, x1, y1), valCoord2D(seed, x2, y1), valCoord2D(seed, x3, y1), xs), cubicLerp(valCoord2D(seed, x0, y2), valCoord2D(seed, x1, y2), valCoord2D(seed, x2, y2), valCoord2D(seed, x3, y2), xs), cubicLerp(valCoord2D(seed, x0, y3), valCoord2D(seed, x1, y3), valCoord2D(seed, x2, y3), valCoord2D(seed, x3, y3), xs), ys) * (1.0 / (1.5 * 1.5));
         }
 
-        fn singleValueCubic3D(seed: i32, x: Float, y: Float, z: Float) Float {
+        pub fn singleValueCubic3D(seed: i32, x: Float, y: Float, z: Float) Float {
             var x1: i32 = fastFloor(x);
             var y1: i32 = fastFloor(y);
             var z1: i32 = fastFloor(z);
@@ -1321,7 +1321,7 @@ pub fn Noise(comptime Float: type) type {
 
         // OpenSimplex2S Noise
 
-        fn singleSimplexS2D(seed: i32, x: Float, y: Float) Float {
+        pub fn singleSimplexS2D(seed: i32, x: Float, y: Float) Float {
             // 2D OpenSimplex2S case is a modified 2D simplex noise.
 
             var i: i32 = fastFloor(x);
@@ -1417,7 +1417,7 @@ pub fn Noise(comptime Float: type) type {
             return value * 18.24196194486065;
         }
 
-        fn singleSimplexS3D(seed: i32, x: Float, y: Float, z: Float) Float {
+        pub fn singleSimplexS3D(seed: i32, x: Float, y: Float, z: Float) Float {
             // 3D OpenSimplex2S case uses two offset rotated cube grids.
 
             var i: i32 = fastFloor(x);
@@ -1575,7 +1575,7 @@ pub fn Noise(comptime Float: type) type {
 
         // Cellular Noise
 
-        fn singleCellular2D(self: *const State, seed: i32, x: Float, y: Float) Float {
+        pub fn singleCellular2D(self: *const State, seed: i32, x: Float, y: Float) Float {
             const xr: i32 = fastRound(x);
             const yr: i32 = fastRound(y);
 
@@ -1670,7 +1670,7 @@ pub fn Noise(comptime Float: type) type {
             return @max(-1.0, @min(1.0, result));
         }
 
-        fn singleCellular3D(state: *const State, seed: i32, x: Float, y: Float, z: Float) Float {
+        pub fn singleCellular3D(state: *const State, seed: i32, x: Float, y: Float, z: Float) Float {
             const xr: i32 = fastRound(x);
             const yr: i32 = fastRound(y);
             const zr: i32 = fastRound(z);
