@@ -58,6 +58,13 @@ pub const device_exts_req = [_][*:0]const u8{
 
 pub const device_exts_opt = [_][*:0]const u8{};
 
+pub const identity_component_mapping = vk.ComponentMapping{
+    .r = .identity,
+    .g = .identity,
+    .b = .identity,
+    .a = .identity,
+};
+
 pub fn findMemoryType(
     instance: Instance,
     physical_device: vk.PhysicalDevice,

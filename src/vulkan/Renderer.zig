@@ -21,6 +21,8 @@ index_buffer: Buffer,
 indices: []const u32,
 descriptor_pool: vk.DescriptorPool,
 descriptor_set_layout: vk.DescriptorSetLayout,
+depth_image: Image,
+depth_view: vk.ImageView,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -117,7 +119,7 @@ pub fn init(
             .image = vk.Image.null_handle,
             .view_type = .@"2d",
             .format = self.surface_format.format,
-            .components = .{ .r = .identity, .g = .identity, .b = .identity, .a = .identity },
+            .components = vulkan.identity_component_mapping,
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -223,10 +225,20 @@ pub fn init(
     );
     errdefer self.vk_allocator.destroyBuffer(self.index_buffer);
 
+    self.depth_image, self.depth_view = try createDepthImageAndView(
+        ctx.device,
+        self.vk_allocator,
+        self.extent,
+    );
+    errdefer ctx.device.destroyImageView(self.depth_view, null);
+    errdefer vk_allocator.destroyImage(self.depth_image);
+
     return self;
 }
 
 pub fn deinit(self: Self, ctx: Context) void {
+    ctx.device.destroyImageView(self.depth_view, null);
+    self.vk_allocator.destroyImage(self.depth_image);
     ctx.device.destroyDescriptorPool(self.descriptor_pool, null);
     ctx.device.destroyDescriptorSetLayout(self.descriptor_set_layout, null);
     self.vk_allocator.destroyBuffer(self.index_buffer);
@@ -604,6 +616,53 @@ fn createDescriptorSetLayout(
     return layout;
 }
 
+fn createDepthImageAndView(
+    device: Device,
+    vk_allocator: *vulkan.Allocator,
+    extent: vk.Extent2D,
+) !struct { Image, vk.ImageView } {
+    const format = .d32_sfloat; // TODO: Proper format selection
+    const image = try vk_allocator.createImage(
+        vk.ImageCreateInfo{
+            .initial_layout = .undefined,
+            .sharing_mode = .exclusive,
+            .usage = .{ .depth_stencil_attachment_bit = true },
+            .tiling = .optimal,
+            .mip_levels = 1,
+            .array_layers = 1,
+            .samples = .{ .@"1_bit" = true },
+            .extent = vk.Extent3D{
+                .width = extent.width,
+                .height = extent.height,
+                .depth = 1,
+            },
+            .format = format,
+            .image_type = .@"2d",
+        },
+        .{ .device_local_bit = true },
+    );
+    errdefer vk_allocator.destroyImage(image);
+
+    const view = try device.createImageView(
+        &vk.ImageViewCreateInfo{
+            .components = vulkan.identity_component_mapping,
+            .image = image.vk_handle,
+            .view_type = .@"2d",
+            .format = format,
+            .subresource_range = vk.ImageSubresourceRange{
+                .aspect_mask = .{ .depth_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        },
+        null,
+    );
+
+    return .{ image, view };
+}
+
 const Self = @This();
 
 const Frame = struct {
@@ -622,6 +681,7 @@ const vulkan = @import("../vulkan.zig");
 const Context = vulkan.Context;
 const Device = vulkan.Device;
 const Buffer = vulkan.vk_allocator.Buffer;
+const Image = vulkan.vk_allocator.Image;
 const UniformBufferObject = @import("../types.zig").UniformBufferObject;
 
 const builtin = @import("builtin");
