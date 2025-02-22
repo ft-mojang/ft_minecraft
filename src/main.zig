@@ -45,7 +45,7 @@ pub fn main() !void {
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
-    const chunk = worldgen.Chunk.generate(0, 0);
+    const chunk = Chunk.generate(0, 0, 0);
     const vertices, const indices = try chunk.toMesh(arena);
 
     // Triangul
@@ -136,9 +136,9 @@ fn render(
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
 
-    const eyes = Vec3f{ 8.0, 150.0, 128.0 };
+    const eyes = Vec3f{ 8.0, 8.0, 32.0 };
     const up = Vec3f{ 0.0, 1.0, 0.0 };
-    const look_at = Vec3f{ 8.0, 150.0, 0.0 };
+    const look_at = Vec3f{ 8.0, 8.0, 0.0 };
     const fov_y = 45.0;
     const width: f32 = @floatFromInt(renderer.extent.width);
     const height: f32 = @floatFromInt(renderer.extent.height);
@@ -278,6 +278,7 @@ fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
 
 const vulkan = @import("vulkan.zig");
 const worldgen = @import("worldgen.zig");
+const Chunk = worldgen.Chunk;
 const CommandBufferSingleUse = vulkan.CommandBufferSingleUse;
 const types = @import("types.zig");
 const Matrix4 = types.Matrix4;

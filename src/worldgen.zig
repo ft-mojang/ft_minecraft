@@ -1,3 +1,6 @@
+/// World height measured in blocks. Must be a multiple of the size of a chunk.
+pub const world_height = 256;
+
 /// Enum variants for all unique block types
 pub const Block = enum(u8) {
     air,
@@ -10,34 +13,36 @@ pub const Block = enum(u8) {
 pub const Chunk = struct {
     blocks: [volume]Block,
 
-    /// Side length of a chunk on the vertical y axis
-    pub const size_y = 256;
-
-    /// Side length of a chunk on the horizontal x and z axes
-    pub const size_xz = blk: {
+    /// Side length of a chunk. Chunks have a uniform side length on each axis.
+    pub const size = blk: {
         const bit_width = @bitSizeOf(Block.Coord) - @bitSizeOf(Coord);
         debug.assert(bit_width > 0);
-        break :blk bit_width * bit_width;
+        const result = bit_width * bit_width;
+        debug.assert(world_height % result == 0);
+        break :blk result;
     };
 
     /// The number of blocks in a chunk
-    pub const volume = size_xz * size_y * size_xz;
+    pub const volume = size * size * size;
 
-    pub fn generate(chunk_x: Coord, chunk_z: Coord) Chunk {
+    pub fn generate(chunk_x: Coord, chunk_y: Coord, chunk_z: Coord) Chunk {
         const seed = 0xdead;
 
         var chunk: Chunk = undefined;
-        for (0..size_xz) |x| {
-            for (0..size_xz) |z| {
-                // We sample from the center of blocks to avoid using integer coordinates as they collapse the perlin noise algorithm.
-                const block_x: Fp = 0.5 + @as(Fp, @floatFromInt(@as(Block.Coord, chunk_x) * size_xz + @as(Block.Coord, @intCast(x))));
-                const block_z: Fp = 0.5 + @as(Fp, @floatFromInt(@as(Block.Coord, chunk_z) * size_xz + @as(Block.Coord, @intCast(z))));
+        for (0..size) |x| {
+            for (0..size) |z| {
+                const block_x = @as(Block.Coord, chunk_x) * size + @as(Block.Coord, @intCast(x));
+                const block_z = @as(Block.Coord, chunk_z) * size + @as(Block.Coord, @intCast(z));
+                // Sample from the block center to avoid using integer coordinates as they collapse the perlin noise algorithm.
+                const sample_x: Fp = 0.5 + @as(Fp, @floatFromInt(block_x));
+                const sample_z: Fp = 0.5 + @as(Fp, @floatFromInt(block_z));
 
-                const continentalness = sampleLayeredNoise2d(seed, block_x, block_z, 1.0, 1.0, 8, 0.5, 2.0);
+                const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.01, 8, 0.5, 2.0);
 
-                const block_height = @as(Block.Coord, @intFromFloat(0.5 * size_y + continentalness * 0.5 * size_y)) - 1;
-                for (0..size_y) |y| {
-                    chunk.blocks[(z * size_y + y) * size_xz + x] = if (y <= block_height) .stone else .air;
+                const block_height = @as(Block.Coord, @intFromFloat(continentalness * 0.5 * world_height)) - 1;
+                for (0..size) |y| {
+                    const block_y = @as(Block.Coord, chunk_y) * size + @as(Block.Coord, @intCast(y));
+                    chunk.blocks[(z * size + y) * size + x] = if (block_y <= block_height) .stone else .air;
                 }
             }
         }
@@ -46,10 +51,10 @@ pub const Chunk = struct {
     }
 
     pub fn print(chunk: Chunk) void {
-        for (0..size_y) |y| {
-            for (0..size_xz) |x| {
-                for (0..size_xz) |z| {
-                    const block = chunk.blocks[(z * size_y + y) * size_xz + x];
+        for (0..size) |y| {
+            for (0..size) |x| {
+                for (0..size) |z| {
+                    const block = chunk.blocks[(z * size + y) * size + x];
                     debug.print("{}", .{@intFromEnum(block)});
                 }
                 debug.print("\n", .{});
@@ -58,14 +63,14 @@ pub const Chunk = struct {
         }
     }
 
-    pub fn toMesh(chunk: Chunk, allocator: Allocator) !struct { []zm.Vec3f, []u32 } {
-        const vertices = try allocator.alloc(zm.Vec3f, volume * 8);
+    pub fn toMesh(chunk: Chunk, allocator: Allocator) !struct { []Vec3f, []u32 } {
+        const vertices = try allocator.alloc(Vec3f, volume * 8);
         const indices = try allocator.alloc(u32, volume * 36);
 
-        for (0..size_y) |y| {
-            for (0..size_xz) |x| {
-                for (0..size_xz) |z| {
-                    const index: u32 = @intCast((z * size_y + y) * size_xz + x);
+        for (0..size) |y| {
+            for (0..size) |x| {
+                for (0..size) |z| {
+                    const index: u32 = @intCast((z * size + y) * size + x);
 
                     if (chunk.blocks[index] == .air) {
                         continue;
@@ -75,14 +80,14 @@ pub const Chunk = struct {
                     const fy: f32 = @floatFromInt(y);
                     const fz: f32 = @floatFromInt(z);
 
-                    vertices[index * 8 + 0] = zm.Vec3f{ fx + 0.0, fy + 0.0, fz + 0.0 }; // LEFT BOTT BACK
-                    vertices[index * 8 + 1] = zm.Vec3f{ fx + 1.0, fy + 0.0, fz + 0.0 }; // RGHT BOTT BACK
-                    vertices[index * 8 + 2] = zm.Vec3f{ fx + 0.0, fy + 1.0, fz + 0.0 }; // LEFT TOPP BACK
-                    vertices[index * 8 + 3] = zm.Vec3f{ fx + 1.0, fy + 1.0, fz + 0.0 }; // RGHT TOPP BACK
-                    vertices[index * 8 + 4] = zm.Vec3f{ fx + 0.0, fy + 0.0, fz + 1.0 }; // LEFT BOTT FRNT
-                    vertices[index * 8 + 5] = zm.Vec3f{ fx + 1.0, fy + 0.0, fz + 1.0 }; // RGHT BOTT FRNT
-                    vertices[index * 8 + 6] = zm.Vec3f{ fx + 0.0, fy + 1.0, fz + 1.0 }; // LEFT TOPP FRNT
-                    vertices[index * 8 + 7] = zm.Vec3f{ fx + 1.0, fy + 1.0, fz + 1.0 }; // RGHT TOPP FRNT
+                    vertices[index * 8 + 0] = Vec3f{ fx + 0.0, fy + 0.0, fz + 0.0 }; // LEFT BOTT BACK
+                    vertices[index * 8 + 1] = Vec3f{ fx + 1.0, fy + 0.0, fz + 0.0 }; // RGHT BOTT BACK
+                    vertices[index * 8 + 2] = Vec3f{ fx + 0.0, fy + 1.0, fz + 0.0 }; // LEFT TOPP BACK
+                    vertices[index * 8 + 3] = Vec3f{ fx + 1.0, fy + 1.0, fz + 0.0 }; // RGHT TOPP BACK
+                    vertices[index * 8 + 4] = Vec3f{ fx + 0.0, fy + 0.0, fz + 1.0 }; // LEFT BOTT FRNT
+                    vertices[index * 8 + 5] = Vec3f{ fx + 1.0, fy + 0.0, fz + 1.0 }; // RGHT BOTT FRNT
+                    vertices[index * 8 + 6] = Vec3f{ fx + 0.0, fy + 1.0, fz + 1.0 }; // LEFT TOPP FRNT
+                    vertices[index * 8 + 7] = Vec3f{ fx + 1.0, fy + 1.0, fz + 1.0 }; // RGHT TOPP FRNT
 
                     indices[index * 36 + 0] = index * 8 + 0; // BACK FACE
                     indices[index * 36 + 1] = index * 8 + 1;
@@ -139,7 +144,7 @@ pub const Chunk = struct {
         lacunarity: Fp,
     ) Fp {
         // Offset to avoid interference patterns between octaves when near zero
-        const octave_offset: Fp = @floatFromInt(math.maxInt(@TypeOf(octave_count)) / octave_count);
+        const octave_offset: Fp = @as(Fp, @floatFromInt(math.maxInt(@TypeOf(octave_count)))) / @as(Fp, @floatFromInt(octave_count));
         var _amplitude: Fp = amplitude;
         var _frequency: Fp = frequency;
         var height_max: Fp = 0.0;
@@ -169,3 +174,4 @@ const math = std.math;
 const Allocator = std.mem.Allocator;
 
 const zm = @import("zm");
+const Vec3f = zm.Vec3f;
