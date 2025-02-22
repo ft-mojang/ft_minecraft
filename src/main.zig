@@ -131,22 +131,22 @@ fn render(
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
 
-    const eyes = Vec3f{ 0.0, 4.0, 0.0 };
+    const eyes = Vec3f{ 8.0, 8.0, 32.0 };
     const up = Vec3f{ 0.0, 1.0, 0.0 };
-    const look_at = Vec3f{ 0.0, 0.0, -1.0 };
+    const look_at = Vec3f{ 8.0, 8.0, 0.0 };
     const fov_y = 45.0;
     const width: f32 = @floatFromInt(renderer.extent.width);
     const height: f32 = @floatFromInt(renderer.extent.height);
     const aspect_ratio = width / height;
-    const near = 1.0;
-    const far = -100.0;
+    const near = 0.1;
+    const far = 100.0;
 
     frame.uniform_buffer_mapped.* = .{
-        .model = Matrix4(f32).fromMat4f(Mat4f.identity()),
-        .view = Matrix4(f32).fromMat4f(Mat4f.lookAt(eyes, look_at, up)),
-        .proj = Matrix4(f32).fromMat4f(Mat4f.perspective(fov_y, aspect_ratio, near, far)),
+        .model = Matrix4(f32).fromMat4f(Mat4f.identity().transpose()),
+        .view = Matrix4(f32).fromMat4f(Mat4f.lookAt(eyes, look_at, up).transpose()),
+        .proj = Matrix4(f32).fromMat4f(Mat4f.perspective(fov_y, aspect_ratio, near, far).transpose()),
     };
-    //frame.uniform_buffer_mapped.proj.data[5] *= -1;
+    frame.uniform_buffer_mapped.proj.data[5] *= -1;
 
     try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
     try ctx.device.beginCommandBuffer(frame.command_buffer, &.{});
