@@ -146,7 +146,7 @@ fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64) void {
     const mouse_delta = zm.vec.scale(mouse_position - input_mouse_last, @as(f32, @floatCast(dt)) * mouse_sensitivity);
     input_mouse_last = mouse_position;
 
-    state.player_rotation[0] -= mouse_delta[1]; // Pitch
+    state.player_rotation[0] += mouse_delta[1]; // Pitch
     state.player_rotation[1] += mouse_delta[0]; // Yaw
 
     state.camera_forward = zm.vec.normalize(Vec3f{
