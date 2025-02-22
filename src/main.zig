@@ -53,7 +53,7 @@ pub fn main() !void {
     var indices_list = ArrayList(u32).init(arena);
     defer indices_list.deinit();
 
-    const world_size = 16;
+    const world_size = 8;
     for (0..world_size) |x| {
         for (0..world_size) |y| {
             for (0..world_size) |z| {
