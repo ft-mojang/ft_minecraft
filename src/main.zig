@@ -189,7 +189,7 @@ fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64) void {
     const camera_right = zm.vec.normalize(zm.vec.cross(zm.vec.up(f32), state.camera_forward));
     const camera_up = zm.vec.normalize(zm.vec.cross(state.camera_forward, camera_right));
 
-    const movement_speed: f32 = 10.0;
+    const movement_speed: f32 = 100.0;
     const delta_velocity = zm.vec.scale(Vec3f{
         -keyToAxis(window, .a) + keyToAxis(window, .d),
         -keyToAxis(window, .left_control) + keyToAxis(window, .space),
