@@ -15,9 +15,12 @@ pub const Chunk = struct {
 
     /// Side length of a chunk. Chunks have a uniform side length on each axis.
     pub const size = blk: {
-        const bit_width = @bitSizeOf(Block.Coord) - @bitSizeOf(Coord);
+        var bit_width = @bitSizeOf(Block.Coord) - @bitSizeOf(Coord);
         debug.assert(bit_width > 0);
-        const result = bit_width * bit_width;
+        var result = 1;
+        while (bit_width > 0) : (bit_width -= 1) {
+            result *= 2;
+        }
         debug.assert(world_height % result == 0);
         break :blk result;
     };
@@ -37,7 +40,7 @@ pub const Chunk = struct {
                 const sample_x: Fp = 0.5 + @as(Fp, @floatFromInt(block_x));
                 const sample_z: Fp = 0.5 + @as(Fp, @floatFromInt(block_z));
 
-                const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.01, 8, 0.5, 2.0);
+                const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.001, 8, 0.5, 2.0);
 
                 const block_height = @as(Block.Coord, @intFromFloat(continentalness * 0.5 * world_height)) - 1;
                 for (0..size) |y| {
