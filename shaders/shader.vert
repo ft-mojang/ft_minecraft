@@ -14,11 +14,9 @@ void main() {
         vec3(1.0, 0.0, 0.0),
         vec3(0.0, 1.0, 0.0),
         vec3(0.0, 0.0, 1.0),
-        vec3(1.0, 1.0, 0.0),
-        vec3(0.0, 1.0, 1.0),
-        vec3(1.0, 0.0, 1.0)
+        vec3(1.0, 1.0, 0.0)
     };
 
     gl_Position = ubo.projection * ubo.view * ubo.model * vec4(in_vertex, 1.0);
-    out_color = vertex_colors[gl_VertexIndex / 6 % 6];
+    out_color = vertex_colors[gl_VertexIndex / 4 % 4];
 }
