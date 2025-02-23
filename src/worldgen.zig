@@ -95,22 +95,17 @@ pub const Chunk = struct {
                 const sample_x: Fp = 0.5 + @as(Fp, @floatFromInt(block_x));
                 const sample_z: Fp = 0.5 + @as(Fp, @floatFromInt(block_z));
 
-                //const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.001, 8, 0.5, 2.0);
+                const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.001, 8, 0.5, 2.0);
 
                 for (0..size) |y| {
-                    // const squashing_factor = 1;
-                    // const height_offset = continentalness;
+                    const squashing_factor = 1.0;
+                    const height_offset = continentalness * 0.5 * world_height - 1;
                     const block_y = @as(Block.Coord, chunk_y) * size + @as(Block.Coord, @intCast(y));
                     const sample_y: Fp = 0.5 + @as(Fp, @floatFromInt(block_y));
-                    const density = sampleLayeredNoise3d(seed, sample_x, sample_y, sample_z, 1.0, 1.0, 8, 0.5, 2.0);
+                    var density = sampleLayeredNoise3d(seed, sample_x, sample_y, sample_z, 1.0, 1.0, 8, 0.5, 2.0);
+                    density -= squashing_factor * (sample_y - height_offset);
                     chunk.blocks[(z * size + x) * size + y] = if (density > 0) .stone else .air;
                 }
-
-                // const block_height = @as(Block.Coord, @intFromFloat(continentalness * 0.5 * world_height)) - 1;
-                // for (0..size) |y| {
-                //     const block_y = @as(Block.Coord, chunk_y) * size + @as(Block.Coord, @intCast(y));
-                //     chunk.blocks[(z * size + x) * size + y] = if (block_y <= block_height) .stone else .air;
-                // }
             }
         }
 
