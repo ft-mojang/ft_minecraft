@@ -81,16 +81,7 @@ pub fn deinit(self: *Self) void {
 }
 
 fn initInstance(vkb: BaseDispatch, validation_layers: AutoArrayHashMap([*:0]const u8, void), extensions: AutoArrayHashMap([*:0]const u8, void)) !Instance {
-    const validation_features_enabled = extensions.contains(vk.extensions.ext_validation_features.name);
-    const validation_features = vk.ValidationFeaturesEXT{
-        .enabled_validation_feature_count = vulkan.enabled_validation_features.len,
-        .p_enabled_validation_features = &vulkan.enabled_validation_features,
-        .disabled_validation_feature_count = vulkan.disabled_validation_features.len,
-        .p_disabled_validation_features = &vulkan.disabled_validation_features,
-    };
-
     const create_info: vk.InstanceCreateInfo = .{
-        .p_next = if (validation_features_enabled) &validation_features else null,
         .flags = .{ .enumerate_portability_bit_khr = (builtin.os.tag == .macos) },
         .p_application_info = &vulkan.app_info,
         .enabled_layer_count = @intCast(validation_layers.count()),

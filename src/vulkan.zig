@@ -12,8 +12,6 @@ pub const apis: []const vk.ApiInfo = &.{
     vk.extensions.khr_portability_subset,
     vk.extensions.khr_surface,
     vk.extensions.khr_swapchain,
-    vk.extensions.ext_debug_utils,
-    vk.extensions.ext_validation_features,
     vk.extensions.khr_dynamic_rendering,
 };
 
@@ -22,15 +20,6 @@ pub const validation_layers_req = if (config.validation_layers) [_][*:0]const u8
 } else [_][*:0]const u8{};
 
 pub const validation_layers_opt = if (config.validation_layers) [_][*:0]const u8{} else [_][*:0]const u8{};
-
-pub const enabled_validation_features = if (config.validation_layers) [_]vk.ValidationFeatureEnableEXT{
-    .best_practices_ext,
-    .gpu_assisted_ext,
-    .gpu_assisted_reserve_binding_slot_ext,
-    .synchronization_validation_ext,
-} else [_]vk.ValidationFeatureEnableEXT{};
-
-pub const disabled_validation_features = [_]vk.ValidationFeatureDisableEXT{};
 
 pub const instance_exts_req = [_][*:0]const u8{
     vk.extensions.khr_surface.name,
@@ -41,10 +30,7 @@ pub const instance_exts_req = [_][*:0]const u8{
     else => [_][*:0]const u8{},
 };
 
-pub const instance_exts_opt = [_][*:0]const u8{
-    vk.extensions.ext_debug_utils.name,
-    vk.extensions.ext_validation_features.name,
-};
+pub const instance_exts_opt = [_][*:0]const u8{};
 
 pub const device_exts_req = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
