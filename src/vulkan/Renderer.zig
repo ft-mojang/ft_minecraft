@@ -21,6 +21,12 @@ index_buffer: Buffer,
 indices: []const u32,
 descriptor_pool: vk.DescriptorPool,
 descriptor_set_layout: vk.DescriptorSetLayout,
+texture_descriptor_pool: vk.DescriptorPool,
+texture_descriptor_set_layout: vk.DescriptorSetLayout,
+texture_descriptors: [1]vk.DescriptorSet,
+texture_image: vk.Image,
+texture_imageview: vk.ImageView,
+texture_sampler: vk.Sampler,
 depth_image: Image,
 depth_view: vk.ImageView,
 
@@ -170,6 +176,53 @@ pub fn init(
     );
     errdefer destroyFrames(allocator, vk_allocator, ctx.device, self.frames);
 
+    self.texture_descriptor_pool = try ctx.device.createDescriptorPool(
+        &vk.DescriptorPoolCreateInfo{
+            .flags = .{},
+            .max_sets = 1,
+            .pool_size_count = 1,
+            .p_pool_sizes = &.{vk.DescriptorPoolSize{
+                .type = .uniform_buffer,
+                .descriptor_count = 1,
+            }},
+        },
+        null,
+    );
+    errdefer ctx.device.destroyDescriptorPool(self.texture_descriptor_pool, null);
+    self.texture_descriptor_set_layout = try ctx.device.createDescriptorSetLayout(
+        &vk.DescriptorSetLayoutCreateInfo{
+            .flags = .{},
+            .binding_count = 1,
+            .p_bindings = @alignCast(@ptrCast(
+                &vk.DescriptorSetLayoutBinding{
+                    .binding = 1,
+                    .descriptor_type = .combined_image_sampler,
+                    .stage_flags = .{
+                        .vertex_bit = true,
+                        .fragment_bit = true,
+                    },
+                    .descriptor_count = 1,
+                },
+            )),
+        },
+        null,
+    );
+    errdefer ctx.device.destroyDescriptorSetLayout(self.texture_descriptor_set_layout, null);
+    const layouts: [max_frames_in_flight]vk.DescriptorSetLayout = @splat(self.texture_descriptor_set_layout);
+    try ctx.device.allocateDescriptorSets(
+        &vk.DescriptorSetAllocateInfo{
+            .descriptor_pool = self.texture_descriptor_pool,
+            .descriptor_set_count = 1,
+            .p_set_layouts = &layouts,
+        },
+        &self.texture_descriptors,
+    );
+
+    self.texture_image, self.texture_imageview, self.texture_sampler = try createImage(
+        ctx.device,
+        self.vk_allocator,
+    );
+
     self.pipeline_layout, self.pipeline = try createPipeline(ctx.device, self.surface_format.format, self.descriptor_set_layout);
     errdefer destroyPipeline(ctx.device, self.pipeline_layout, self.pipeline);
 
@@ -234,6 +287,75 @@ pub fn init(
     errdefer vk_allocator.destroyImage(self.depth_image);
 
     return self;
+}
+
+pub fn createImage(
+    device: Device,
+    vk_allocator: *vulkan.Allocator,
+) !struct { vk.Image, vk.ImageView, vk.Sampler } {
+    const format = .r8g8b8a8_srgb; // TODO: Proper format selection
+    const image = try vk_allocator.createImage(
+        vk.ImageCreateInfo{
+            .initial_layout = .undefined,
+            .sharing_mode = .exclusive,
+            .usage = .{ .sampled_bit = true, .transfer_dst_bit = true },
+            .tiling = .optimal,
+            .mip_levels = 1,
+            .array_layers = 1,
+            .samples = .{ .@"1_bit" = true },
+            .extent = vk.Extent3D{
+                .width = 1000,
+                .height = 1000,
+                .depth = 1,
+            },
+            .format = format,
+            .image_type = .@"2d",
+        },
+        .{ .device_local_bit = true },
+    );
+    errdefer vk_allocator.destroyImage(image);
+
+    const view = try device.createImageView(
+        &vk.ImageViewCreateInfo{
+            .components = vulkan.identity_component_mapping,
+            .image = image.vk_handle,
+            .view_type = .@"2d",
+            .format = format,
+            .subresource_range = vk.ImageSubresourceRange{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        },
+        null,
+    );
+    errdefer device.destroyImageView(view, null);
+
+    const sampler = try device.createSampler(
+        &vk.SamplerCreateInfo{
+            .mag_filter = .linear,
+            .min_filter = .linear,
+            .address_mode_u = .repeat,
+            .address_mode_v = .repeat,
+            .address_mode_w = .repeat,
+            .mip_lod_bias = 0.0,
+            .mipmap_mode = .linear,
+            .min_lod = 0.0,
+            .max_lod = 0.0,
+            .anisotropy_enable = 1,
+            .max_anisotropy = 1.0,
+            .compare_enable = 0,
+            .compare_op = .always,
+            .unnormalized_coordinates = 0,
+            .border_color = .int_opaque_black,
+        },
+        null,
+    );
+    errdefer device.destroySampler(sampler, null);
+
+    return .{ image, view, sampler };
 }
 
 pub fn deinit(self: Self, ctx: Context) void {
