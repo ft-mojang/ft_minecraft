@@ -18,6 +18,10 @@ pub fn VecXY(comptime T: type) type {
         x: T,
         y: T,
 
+        pub fn xy(x: T, y: T) Self {
+            return .{ .x = x, .y = y };
+        }
+
         /// Casts the vector into it's more generic representation.
         pub fn asGeneric(self: Self) GenericRepr {
             return @bitCast(self);
@@ -41,19 +45,19 @@ pub fn VecXY(comptime T: type) type {
         }
 
         pub fn dot(lhs: Self, rhs: anytype) T {
-            return lhs.asGeneric().dot(rhs.asGeneric());
+            return lhs.asGeneric().dot(rhs);
         }
 
         pub fn add(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().add(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().add(rhs).asComponent();
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().sub(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().sub(rhs).asComponent();
         }
 
         pub fn div(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().div(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().div(rhs).asComponent();
         }
 
         pub fn mul(lhs: Self, rhs: anytype) Self {
@@ -76,6 +80,10 @@ pub fn VecXYZ(comptime T: type) type {
         z: T,
 
         // Specialized
+
+        pub fn xyz(x: T, y: T, z: T) Self {
+            return .{ .x = x, .y = y, .z = z };
+        }
 
         pub fn cross(lhs: Self, rhs: anytype) Self {
             const _rhs = rhs.asComponent();
@@ -112,19 +120,19 @@ pub fn VecXYZ(comptime T: type) type {
         }
 
         pub fn dot(lhs: Self, rhs: anytype) T {
-            return lhs.asGeneric().dot(rhs.asGeneric());
+            return lhs.asGeneric().dot(rhs);
         }
 
         pub fn add(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().add(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().add(rhs).asComponent();
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().sub(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().sub(rhs).asComponent();
         }
 
         pub fn div(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().div(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().div(rhs).asComponent();
         }
 
         pub fn mul(lhs: Self, rhs: anytype) Self {
@@ -146,6 +154,15 @@ pub fn VecXYZW(comptime T: type) type {
         y: T,
         z: T,
         w: T,
+
+        pub fn xyzw(x: T, y: T, z: T, w: T) Self {
+            return .{
+                .x = x,
+                .y = y,
+                .z = z,
+                .w = w,
+            };
+        }
 
         /// Casts the vector into it's more generic representation.
         pub fn asGeneric(self: Self) GenericRepr {
@@ -170,19 +187,19 @@ pub fn VecXYZW(comptime T: type) type {
         }
 
         pub fn dot(lhs: Self, rhs: anytype) T {
-            return lhs.asGeneric().dot(rhs.asGeneric());
+            return lhs.asGeneric().dot(rhs);
         }
 
         pub fn add(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().add(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().add(rhs).asComponent();
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().sub(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().sub(rhs).asComponent();
         }
 
         pub fn div(lhs: Self, rhs: anytype) Self {
-            return lhs.asGeneric().div(rhs.asGeneric()).asComponent();
+            return lhs.asGeneric().div(rhs).asComponent();
         }
 
         pub fn mul(lhs: Self, rhs: anytype) Self {
@@ -193,7 +210,7 @@ pub fn VecXYZW(comptime T: type) type {
             return self.asGeneric().normalize().asComponent();
         }
 
-        const GenericRepr = Vec(T, 3);
+        const GenericRepr = Vec(T, 4);
         const Self = VecXYZW(T);
     };
 }
@@ -216,25 +233,16 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             return self;
         }
 
-        pub fn xyz(x: T, y: T, z: T) Self {
-            comptime debug.assert(N == 3);
+        pub fn xy(x: T, y: T) Self {
+            return ComponentRepr.xy(x, y).asGeneric();
+        }
 
-            return (VecXYZ(T){
-                .x = x,
-                .y = y,
-                .z = z,
-            }).asGeneric();
+        pub fn xyz(x: T, y: T, z: T) Self {
+            return ComponentRepr.xyz(x, y, z).asGeneric();
         }
 
         pub fn xyzw(x: T, y: T, z: T, w: T) Self {
-            comptime debug.assert(N == 4);
-
-            return (VecXYZW(T){
-                .x = x,
-                .y = y,
-                .z = z,
-                .w = w,
-            }).asGeneric();
+            return ComponentRepr.xyzw(x, y, z, w).asGeneric();
         }
 
         /// Returns self. Exists for generics.
@@ -281,7 +289,7 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             const use_simd = comptime @sizeOf(Self) == @sizeOf(VectorRepr);
             var out: [N]T = undefined;
 
-            if (comptime @TypeOf(rhs.asGeneric()) == Self) {
+            if (comptime isVector(@TypeOf(rhs))) {
                 if (comptime use_simd) {
                     return @bitCast(@as(VectorRepr, @bitCast(lhs)) - @as(VectorRepr, @bitCast(rhs)));
                 }
@@ -308,7 +316,7 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             const use_simd = comptime @sizeOf(Self) == @sizeOf(VectorRepr);
             var out: [N]T = undefined;
 
-            if (comptime @TypeOf(rhs.asGeneric()) == Self) {
+            if (comptime isVector(@TypeOf(rhs))) {
                 if (comptime use_simd) {
                     return @bitCast(@as(VectorRepr, @bitCast(lhs)) + @as(VectorRepr, @bitCast(rhs)));
                 }
@@ -346,7 +354,7 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
 
         pub fn mul(lhs: Self, rhs: T) Self {
             if (comptime @sizeOf(Self) == @sizeOf(VectorRepr)) {
-                return @as(VectorRepr, @bitCast(lhs)) * @as(VectorRepr, @splat(rhs));
+                return @bitCast(@as(VectorRepr, @bitCast(lhs)) * @as(VectorRepr, @splat(rhs)));
             }
 
             var out: [N]T = undefined;
@@ -355,6 +363,16 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             }
 
             return @bitCast(out);
+        }
+
+        fn isVector(comptime U: type) bool {
+            if (comptime !meta.hasMethod(U, "asGeneric")) {
+                return false;
+            }
+            if (comptime @typeInfo(@TypeOf(U.asGeneric)).@"fn".return_type != Self) {
+                return false;
+            }
+            return true;
         }
 
         const ComponentRepr = switch (N) {
@@ -477,19 +495,58 @@ test "matrix scalar initialization" {
 }
 
 test "vector dot product" {
-    const a = Vec(f32, 4).xyzw(1, 2, 3, 4);
-    const b = Vec(f32, 4).xyzw(5, 6, 7, 8);
+    const a = Vec4fx.xyzw(1, 2, 3, 4);
+    const b = Vec4fx.xyzw(5, 6, 7, 8);
 
     try testing.expectEqual(a.dot(b), 70);
 
-    const c = Vec(f32, 3).xyz(1, 2, 3);
-    const d = Vec(f32, 3).xyz(4, 5, 6);
+    const c = Vec3fx.xyz(1, 2, 3);
+    const d = Vec3fx.xyz(4, 5, 6);
 
     try testing.expectEqual(c.dot(d), 32);
 }
 
+test "vector addition" {
+    const a = Vec4fx.xyzw(1, 2, 3, 4);
+    const b = Vec4fx.xyzw(1, 2, 3, 4);
+
+    try testing.expect(meta.eql(a.add(b), Vec4fx.xyzw(2, 4, 6, 8)));
+}
+
+test "vector scalar addition" {
+    const a = Vec4fx.xyzw(1, 2, 3, 4);
+
+    try testing.expect(meta.eql(a.add(1), Vec4fx.xyzw(2, 3, 4, 5)));
+}
+
+test "vector substraction" {
+    const a = Vec4fx.xyzw(1, 2, 3, 4);
+    const b = Vec4fx.xyzw(1, 2, 3, 4);
+
+    try testing.expect(meta.eql(a.sub(b), Vec4fx.xyzw(0, 0, 0, 0)));
+}
+
+test "vector scalar substraction" {
+    const a = Vec4fx.xyzw(1, 2, 3, 4);
+
+    try testing.expect(meta.eql(a.sub(1), Vec4fx.xyzw(0, 1, 2, 3)));
+}
+
+test "vector multiplication" {
+    const a = Vec4fx.xyzw(1, 2, 3, 4);
+
+    try testing.expect(meta.eql(a.mul(2), Vec4fx.xyzw(2, 4, 6, 8)));
+}
+
+test "vector division" {
+    const a = Vec4fx.xyzw(2, 4, 6, 8);
+
+    try testing.expect(meta.eql(a.div(2), Vec4fx.xyzw(1, 2, 3, 4)));
+}
+
 const std = @import("std");
 const math = std.math;
+const meta = std.meta;
 const debug = std.debug;
 const builtin = std.builtin;
 const Type = builtin.Type;

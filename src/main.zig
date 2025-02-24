@@ -351,6 +351,10 @@ fn logGLFWError(error_code: glfw.ErrorCode, description: [:0]const u8) void {
     log.err("{}: {s}\n", .{ error_code, description });
 }
 
+test {
+    std.testing.refAllDecls(@import("math.zig"));
+}
+
 const vulkan = @import("vulkan.zig");
 const CommandBufferSingleUse = vulkan.CommandBufferSingleUse;
 const worldgen = @import("worldgen.zig");

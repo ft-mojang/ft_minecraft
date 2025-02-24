@@ -29,7 +29,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const executables = [_]*std.Build.Step.Compile{exe, check};
+    const exe_unit_tests = b.addTest(.{
+        .root_source_file = root_source_file,
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const executables = [_]*std.Build.Step.Compile{exe, check, exe_unit_tests};
 
     const vertex_shader_module = b.addModule("shader.vert", .{
         .root_source_file = compileShader(
@@ -111,12 +117,6 @@ pub fn build(b: *std.Build) void {
     // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-
-    const exe_unit_tests = b.addTest(.{
-        .root_source_file = root_source_file,
-        .target = target,
-        .optimize = optimize,
-    });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 
