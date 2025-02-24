@@ -227,7 +227,6 @@ fn render(
         .view = Matrix4(f32).fromMat4f(Mat4f.lookAt(game_state.player_position, look_at, up).transpose()),
         .proj = Matrix4(f32).fromMat4f(Mat4f.perspective(std.math.pi / 4.0, aspect_ratio, near, far).transpose()),
     };
-    frame.uniform_buffer_mapped.proj.data[5] *= -1;
 
     try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
     try ctx.device.beginCommandBuffer(frame.command_buffer, &.{});
@@ -298,11 +297,11 @@ fn render(
         1,
         &.{vk.Viewport{
             .x = 0,
-            .y = 0,
+            .y = @floatFromInt(renderer.extent.height),
             .width = @floatFromInt(renderer.extent.width),
-            .height = @floatFromInt(renderer.extent.height),
-            .min_depth = 0,
-            .max_depth = 0,
+            .height = -1.0 * @as(f32, @floatFromInt(renderer.extent.height)),
+            .min_depth = 0.0,
+            .max_depth = 1.0,
         }},
     );
 
