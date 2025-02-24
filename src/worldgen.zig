@@ -1,5 +1,5 @@
 /// World height measured in blocks. Must be a multiple of the size of a chunk.
-pub const world_height = 256;
+pub const world_height = 320;
 
 /// Sums octaves of 2D noise and returns a normalized result in range -1 to 1 (inclusive)
 fn sampleLayeredNoise2d(
@@ -95,14 +95,15 @@ pub const Chunk = struct {
                 const sample_x: Fp = 0.5 + @as(Fp, @floatFromInt(block_x));
                 const sample_z: Fp = 0.5 + @as(Fp, @floatFromInt(block_z));
 
-                const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.001, 8, 0.5, 2.0);
+                const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.002, 16, 0.5, 2.0);
+
+                const squashing_factor = 0.01;
+                const height_offset = continentalness * 0.5 * world_height - 1;
 
                 for (0..size) |y| {
-                    const squashing_factor = 1.0;
-                    const height_offset = continentalness * 0.5 * world_height - 1;
                     const block_y = @as(Block.Coord, chunk_y) * size + @as(Block.Coord, @intCast(y));
                     const sample_y: Fp = 0.5 + @as(Fp, @floatFromInt(block_y));
-                    var density = sampleLayeredNoise3d(seed, sample_x, sample_y, sample_z, 1.0, 1.0, 8, 0.5, 2.0);
+                    var density = sampleLayeredNoise3d(seed, sample_x, sample_y, sample_z, 1.0, 0.001, 16, 0.5, 2.0);
                     density -= squashing_factor * (sample_y - height_offset);
                     chunk.blocks[(z * size + x) * size + y] = if (density > 0) .stone else .air;
                 }
