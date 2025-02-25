@@ -33,7 +33,7 @@ jobs:
 
       - name: Fetch & unpack zig
         run: |
-          curl -s https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.3258+d2e70ef84.tar.xz -o zig.tar.xz
+          curl -s https://github.com/ft-mojang/zig/releases/download/dev.3258%2Bd2e70ef84/zig-linux-x86_64-0.14.0-dev.3258+d2e70ef84.tar.xz -o zig.tar.xz
           mkdir -p gh-zig && tar xf zig.tar.xz -C gh-zig --strip-components 1
 # curl -s  https://ziglang.org/download/index.json | jq '.master."x86_64-linux".tarball' | xargs curl -o zig.tar.xz
 
