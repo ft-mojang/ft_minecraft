@@ -226,7 +226,7 @@ pub fn init(
     errdefer self.vk_allocator.destroyBuffer(self.index_buffer);
 
     self.depth_image, self.depth_view = try createDepthImageAndView(
-        ctx.device,
+        ctx,
         self.vk_allocator,
         self.extent,
     );
@@ -644,11 +644,17 @@ fn createDescriptorSetLayout(
 }
 
 fn createDepthImageAndView(
-    device: Device,
+    ctx: Context,
     vk_allocator: *vulkan.Allocator,
     extent: vk.Extent2D,
 ) !struct { Image, vk.ImageView } {
-    const format = .d32_sfloat; // TODO: Proper format selection
+    const formats = &.{ .d32_sfloat, .d32_sfloat_s8_uint, .d24_unorm_s8_uint };
+    const format_features = vk.FormatFeatureFlags{ .depth_stencil_attachment_bit = true };
+
+    const format = vulkan.selectSupportedOptimalTilingFormat(ctx, formats, format_features) orelse {
+        return error.NoSupportedDepthFormats;
+    };
+
     const image = try vk_allocator.createImage(
         vk.ImageCreateInfo{
             .initial_layout = .undefined,
@@ -670,7 +676,7 @@ fn createDepthImageAndView(
     );
     errdefer vk_allocator.destroyImage(image);
 
-    const view = try device.createImageView(
+    const view = try ctx.device.createImageView(
         &vk.ImageViewCreateInfo{
             .components = vulkan.identity_component_mapping,
             .image = image.vk_handle,
@@ -690,8 +696,6 @@ fn createDepthImageAndView(
     return .{ image, view };
 }
 
-const Self = @This();
-
 const Frame = struct {
     in_flight: vk.Fence,
     image_acquired: vk.Semaphore,
@@ -704,6 +708,7 @@ const Frame = struct {
     uniform_buffer_mapped: *UniformBufferObject,
 };
 
+const Self = @This();
 const vulkan = @import("../vulkan.zig");
 const Context = vulkan.Context;
 const Device = vulkan.Device;

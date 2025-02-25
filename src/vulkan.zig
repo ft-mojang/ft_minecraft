@@ -238,6 +238,48 @@ pub fn cmdCopySimpleBuffer(ctx: Context, command_buffer: vk.CommandBuffer, src: 
     );
 }
 
+pub fn selectSupportedOptimalTilingFormat(
+    ctx: Context,
+    formats: []const vk.Format,
+    features: vk.FormatFeatureFlags,
+) ?vk.Format {
+    for (formats) |format| {
+        const properties = ctx.instance.getPhysicalDeviceFormatProperties(ctx.physical_device, format);
+
+        if (properties.optimal_tiling_features.contains(features)) {
+            return format;
+        }
+    }
+    return null;
+}
+
+pub fn selectSupportedLinearTilingFormat(
+    ctx: Context,
+    formats: []const vk.Format,
+    features: vk.FormatFeatureFlags,
+) ?vk.Format {
+    for (formats) |format| {
+        const properties = ctx.instance.getPhysicalDeviceFormatProperties(ctx.physical_device, format);
+
+        if (properties.linear_tiling_features.contains(features)) {
+            return format;
+        }
+    }
+    return null;
+}
+
+pub fn selectSupportedFormat(
+    ctx: Context,
+    formats: []const vk.Format,
+    features: vk.FormatFeatureFlags,
+    tiling: vk.ImageTiling,
+) ?vk.Format {
+    return switch (tiling) {
+        .linear => selectSupportedLinearTilingFormat(ctx, formats, features),
+        .optimal => selectSupportedOptimalTilingFormat(ctx, formats, features),
+    };
+}
+
 pub const CommandBufferSingleUse = struct {
     device: Device,
     pool: vk.CommandPool,
