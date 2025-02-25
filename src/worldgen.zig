@@ -139,6 +139,23 @@ pub const Chunk = struct {
                         continue;
                     }
 
+                    if (x > 0 and x < size - 1 and y > 0 and y < size - 1 and z > 0 and z < size - 1) {
+                        inline for (.{
+                            (z * size + x) * size + (y + 1),
+                            (z * size + x) * size + (y - 1),
+                            (z * size + (x + 1)) * size + y,
+                            (z * size + (x - 1)) * size + y,
+                            ((z + 1) * size + x) * size + y,
+                            ((z - 1) * size + x) * size + y,
+                        }) |neighbour_index| {
+                            if (chunk.blocks[neighbour_index] == .air) {
+                                break;
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
+
                     const fx: f32 = @floatFromInt(x);
                     const fy: f32 = @floatFromInt(y);
                     const fz: f32 = @floatFromInt(z);
