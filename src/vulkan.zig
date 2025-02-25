@@ -151,6 +151,9 @@ pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
         options.new_layout == vk.ImageLayout.depth_stencil_attachment_optimal)
     // zig fmt: on
     blk: {
+        if (options.format == .undefined) {
+            log.warn("depth image transition does not define a format", .{});
+        }
         break :blk Transition{
             .src_stage = .{ .top_of_pipe_bit = true },
             .dst_stage = .{ .early_fragment_tests_bit = true },
@@ -159,8 +162,10 @@ pub fn cmdTransitionImageLayout(options: CmdTransitionImageLayoutOptions) void {
                 .depth_stencil_attachment_read_bit = true,
                 .depth_stencil_attachment_write_bit = true,
             },
-            .aspect_mask = .{ .depth_bit = true },
-            // TODO: Stencil component?
+            .aspect_mask = .{
+                .depth_bit = true,
+                .stencil_bit = hasStencilComponent(options.format),
+            },
         };
     } else {
         @panic("layout transition not defined");
@@ -280,6 +285,10 @@ pub fn selectSupportedFormat(
     };
 }
 
+pub fn hasStencilComponent(format: vk.Format) bool {
+    return format == .d32_sfloat_s8_uint or format == .d24_unorm_s8_uint;
+}
+
 pub const CommandBufferSingleUse = struct {
     device: Device,
     pool: vk.CommandPool,
@@ -335,6 +344,7 @@ pub const CmdTransitionImageLayoutOptions = struct {
     device: Device,
     command_buffer: vk.CommandBuffer,
     image: vk.Image,
+    format: vk.Format = .undefined,
     old_layout: vk.ImageLayout,
     new_layout: vk.ImageLayout,
 };
