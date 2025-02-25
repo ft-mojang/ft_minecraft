@@ -38,6 +38,7 @@ pub fn main() !void {
     };
     defer window.destroy();
 
+    window.setCursorPos(0.0, 0.0);
     window.setInputModeCursor(.disabled);
     window.setInputModeRawMouseMotion(true);
 
@@ -48,21 +49,24 @@ pub fn main() !void {
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
+    const world_size = 8;
+    var chunk_list = try ArrayList(Chunk).initCapacity(arena, world_size * world_size * world_size);
+    defer chunk_list.deinit();
+
     var vertices_list = ArrayList(Vec3f).init(arena);
     defer vertices_list.deinit();
     var indices_list = ArrayList(u32).init(arena);
     defer indices_list.deinit();
 
-    const world_size = 8;
     for (0..world_size) |x| {
         for (0..world_size) |y| {
             for (0..world_size) |z| {
                 const chunk_x = @as(Chunk.Coord, @intCast(x)) - world_size / 2;
                 const chunk_y = @as(Chunk.Coord, @intCast(y)) - world_size / 2;
                 const chunk_z = @as(Chunk.Coord, @intCast(z)) - world_size / 2;
-                const chunk = Chunk.generate(chunk_x, chunk_y, chunk_z);
+                chunk_list.appendAssumeCapacity(Chunk.generate(chunk_x, chunk_y, chunk_z));
 
-                var vertices, var indices = try chunk.toMesh(arena);
+                var vertices, var indices = try chunk_list.items[chunk_list.items.len - 1].toMesh(arena);
                 for (vertices, 0..) |_, i| {
                     vertices[i] += Vec3f{
                         @floatFromInt(@as(Block.Coord, chunk_x) * Chunk.size),
@@ -129,9 +133,9 @@ pub fn main() !void {
     try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
 
     var game_state = GameState{
-        .player_position = Vec3f{ 0.0, 0.0, 32.0 },
-        .player_rotation = Vec3f{ 0.0, 0.0, 0.0 },
-        .camera_forward = Vec3f{ 0.0, 0.0, 1.0 },
+        .player_position = Vec3f{ 0.0, 32.0, 0.0 },
+        .player_rotation = Vec3f{ 0.0, std.math.pi / 2.0, 0.0 },
+        .camera_forward = Vec3f{ 0.0, 0.0, -1.0 },
     };
 
     const max_updates_per_loop = 8;
@@ -164,15 +168,26 @@ pub fn main() !void {
 
 // Funny temporary input impl
 var input_mouse_last = Vec2f{ 0.0, 0.0 };
+var input_mouse_cursor = false;
 
 fn keyToAxis(window: *const glfw.Window, key: glfw.Key) f32 {
     return if (window.getKey(key) == .press) 1.0 else 0.0;
 }
 
 fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64) void {
-    //const camera_y = zm.vec.normalize(camera_x, camera_z);
+    if (window.getKey(.one) == .press) {
+        window.setCursorPos(0.0, 0.0);
+        input_mouse_last = Vec2f{ 0.0, 0.0 };
+        window.setInputModeCursor(.disabled);
+        input_mouse_cursor = false;
+    } else if (window.getKey(.two) == .press) {
+        window.setInputModeCursor(.normal);
+        input_mouse_cursor = true;
+    }
 
-    const mouse_sensitivity = 0.5;
+    if (input_mouse_cursor) return;
+
+    const mouse_sensitivity = 0.3;
     const mouse_pos_glfw = window.getCursorPos();
     const mouse_position = Vec2f{ @floatCast(mouse_pos_glfw.xpos), @floatCast(mouse_pos_glfw.ypos) };
     const mouse_delta = zm.vec.scale(mouse_position - input_mouse_last, @as(f32, @floatCast(dt)) * mouse_sensitivity);
