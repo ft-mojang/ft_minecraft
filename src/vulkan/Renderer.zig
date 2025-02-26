@@ -23,6 +23,7 @@ descriptor_pool: vk.DescriptorPool,
 descriptor_set_layout: vk.DescriptorSetLayout,
 depth_image: Image,
 depth_view: vk.ImageView,
+depth_format: vk.Format,
 
 const preferred_present_mode = [_]vk.PresentModeKHR{
     .fifo_khr,
@@ -225,7 +226,7 @@ pub fn init(
     );
     errdefer self.vk_allocator.destroyBuffer(self.index_buffer);
 
-    self.depth_image, self.depth_view = try createDepthImageAndView(
+    self.depth_image, self.depth_view, self.depth_format = try createDepthImageAndView(
         ctx,
         self.vk_allocator,
         self.extent,
@@ -647,7 +648,7 @@ fn createDepthImageAndView(
     ctx: Context,
     vk_allocator: *vulkan.Allocator,
     extent: vk.Extent2D,
-) !struct { Image, vk.ImageView } {
+) !struct { Image, vk.ImageView, vk.Format } {
     const formats = &.{ .d32_sfloat, .d32_sfloat_s8_uint, .d24_unorm_s8_uint };
     const format_features = vk.FormatFeatureFlags{ .depth_stencil_attachment_bit = true };
 
@@ -693,7 +694,7 @@ fn createDepthImageAndView(
         null,
     );
 
-    return .{ image, view };
+    return .{ image, view, format };
 }
 
 const Frame = struct {

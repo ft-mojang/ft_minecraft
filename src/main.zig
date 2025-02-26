@@ -131,6 +131,7 @@ pub fn main() !void {
         .image = renderer.depth_image.vk_handle,
         .old_layout = .undefined,
         .new_layout = .depth_stencil_attachment_optimal,
+        .format = renderer.depth_format,
     });
     try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
 
