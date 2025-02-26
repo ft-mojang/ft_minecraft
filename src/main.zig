@@ -2,6 +2,8 @@ const window_title = "ft_minecraft";
 const window_width = 640;
 const window_height = 480;
 
+const zm = @import("zm");
+
 pub fn main() !void {
     var general_purpose_allocator = heap.GeneralPurposeAllocator(.{}).init;
     defer _ = general_purpose_allocator.deinit();
@@ -241,7 +243,7 @@ fn render(
     const far = 1000.0;
 
     frame.uniform_buffer_mapped.* = .{
-        .model = Mat4f.identity(),
+        .model = Mat4f.translate(Vec3f.xyz(0, 0, -100)),
         .view = Mat4f.lookAt(game_state.player_position, look_at, up),
         .proj = Mat4f.perspective(math.pi / 4.0, aspect_ratio, near, far),
     };

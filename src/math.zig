@@ -487,6 +487,70 @@ pub fn Mat(comptime T: type, comptime N: usize) type {
             return Self.diagonal(1);
         }
 
+        pub fn translate(offset: anytype) Self {
+            const _offset = offset.asComponent();
+            var data = Self.identity().data;
+
+            data[3][0] = _offset.x;
+            data[3][1] = _offset.y;
+            data[3][2] = _offset.z;
+
+            return .{ .data = data };
+        }
+
+        pub fn scaleUniform(value: T) Self {
+            var data = Self.identity().data;
+
+            data[0][1] = value;
+            data[1][1] = value;
+            data[2][2] = value;
+
+            return .{ .data = data };
+        }
+
+        pub fn scale(values: anytype) Self {
+            const _values = values.asComponent();
+            var data = Self.identity().data;
+
+            data[0][1] = _values.x;
+            data[1][1] = _values.y;
+            data[2][2] = _values.z;
+
+            return .{ .data = data };
+        }
+
+        // TODO: Needs support for Vec*arr
+        //        pub fn rotate(radians: f32, axis: anytype) Self {
+        //            const a = radians;
+        //            const c = @cos(a);
+        //            const s = @sin(a);
+        //            const _axis = axis.asComponent().normalize();
+        //            const temp = _axis.mul(1.0 - c);
+        //
+        //            var rot = Self.zero().data;
+        //            rot[0][0] = c + temp.x * axis.x;
+        //            rot[0][1] = temp.x * axis.y + s * axis.z;
+        //            rot[0][2] = temp.x * axis.z - s * axis.y;
+        //
+        //            rot[1][0] = temp.y * axis.x - s * axis.z;
+        //            rot[1][1] = c + temp.y * axis.y;
+        //            rot[1][2] = temp.y * axis.z + s * axis.x;
+        //
+        //            rot[2][0] = temp.z * axis.x + s * axis.y;
+        //            rot[2][1] = temp.z * axis.y - s * axis.x;
+        //            rot[2][2] = c + temp.z * axis.z;
+        //
+        //            const ident = Self.identity().data;
+        //            var result = Self.zero().data;
+        //
+        //            result[0] = @bitCast(ident[0].mul(rot[0][0]).add(ident[1].mul(rot[0][1])).add(ident[2].mul(rot[0][2])));
+        //            result[1] = @bitCast(ident[0].mul(rot[1][0]).add(ident[1].mul(rot[1][1])).add(ident[2].mul(rot[1][2])));
+        //            result[2] = @bitCast(ident[0].mul(rot[2][0]).add(ident[1].mul(rot[2][1])).add(ident[2].mul(rot[2][2])));
+        //            result[3] = ident[3];
+        //
+        //            return .{ .data = result };
+        //        }
+
         pub fn perspective(fov_y: T, aspect_ratio: T, near: T, far: T) Self {
             if (comptime N != 4) {
                 @compileError("perspective projection must be a 4x4 Matrix");
@@ -501,7 +565,7 @@ pub fn Mat(comptime T: type, comptime N: usize) type {
             data[2][3] = -1;
             data[3][2] = (far * near) / (far - near);
 
-            return Self{ .data = data };
+            return .{ .data = data };
         }
 
         pub fn lookAt(eyes: anytype, target: anytype, up: anytype) Self {
@@ -524,7 +588,7 @@ pub fn Mat(comptime T: type, comptime N: usize) type {
             data[3][1] = -u.dot(eyes);
             data[3][2] = f.dot(eyes);
 
-            return Self{ .data = data };
+            return .{ .data = data };
         }
 
         pub fn mul(self: Self, rhs: Self) Self {
@@ -547,7 +611,7 @@ pub fn Mat(comptime T: type, comptime N: usize) type {
             data[2] = @bitCast(a3.mul(b2.w).add(a2.mul(b2.z)).add(a1.mul(b2.y)).add(a0.mul(b2.x)));
             data[3] = @bitCast(a3.mul(b3.w).add(a2.mul(b3.z)).add(a1.mul(b3.y)).add(a0.mul(b3.x)));
 
-            return @bitCast(data);
+            return .{ .data = data };
         }
 
         const Self = Mat(T, N);
