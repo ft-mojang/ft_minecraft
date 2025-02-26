@@ -169,12 +169,12 @@ pub const Chunk = struct {
                     vertices[index * 8 + 6] = Vec3f.xyz(fx + 0.0, fy + 1.0, fz + 1.0); // LEFT TOPP FRNT
                     vertices[index * 8 + 7] = Vec3f.xyz(fx + 1.0, fy + 1.0, fz + 1.0); // RGHT TOPP FRNT
 
-                    indices[index * 36 + 0] = index * 8 + 0; // BACK FACE
+                    indices[index * 36 + 0] = index * 8 + 2; // BACK FACE
                     indices[index * 36 + 1] = index * 8 + 1;
-                    indices[index * 36 + 2] = index * 8 + 2;
-                    indices[index * 36 + 3] = index * 8 + 1;
+                    indices[index * 36 + 2] = index * 8 + 0;
+                    indices[index * 36 + 3] = index * 8 + 2;
                     indices[index * 36 + 4] = index * 8 + 3;
-                    indices[index * 36 + 5] = index * 8 + 2;
+                    indices[index * 36 + 5] = index * 8 + 1;
                     indices[index * 36 + 6] = index * 8 + 4; // FRNT FACE
                     indices[index * 36 + 7] = index * 8 + 5;
                     indices[index * 36 + 8] = index * 8 + 6;

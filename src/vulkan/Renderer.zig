@@ -420,6 +420,7 @@ fn createPipeline(
                 .depth_bias_clamp = 0.0,
                 .depth_bias_constant_factor = 0.0,
                 .depth_bias_enable = vk.FALSE,
+                .cull_mode = .{ .back_bit = true },
                 .front_face = .counter_clockwise,
                 .polygon_mode = .fill,
                 .rasterizer_discard_enable = vk.FALSE,
