@@ -68,11 +68,11 @@ pub fn main() !void {
 
                 var vertices, var indices = try chunk_list.items[chunk_list.items.len - 1].toMesh(arena);
                 for (vertices, 0..) |_, i| {
-                    vertices[i] += Vec3f{
+                    vertices[i].addAssign(Vec3f.xyz(
                         @floatFromInt(@as(Block.Coord, chunk_x) * Chunk.size),
                         @floatFromInt(@as(Block.Coord, chunk_y) * Chunk.size),
                         @floatFromInt(@as(Block.Coord, chunk_z) * Chunk.size),
-                    };
+                    ));
                 }
                 for (indices, 0..) |_, i| {
                     indices[i] += @intCast(vertices_list.items.len);
@@ -133,9 +133,9 @@ pub fn main() !void {
     try cmd_buf_single_use.submitAndDestroy(vk_ctx.queue.handle);
 
     var game_state = GameState{
-        .player_position = Vec3f{ 0.0, 32.0, 0.0 },
-        .player_rotation = Vec3f{ 0.0, std.math.pi / 2.0, 0.0 },
-        .camera_forward = Vec3f{ 0.0, 0.0, -1.0 },
+        .player_position = Vec3f.xyz(0.0, 32.0, 0.0),
+        .player_rotation = Vec3f.xyz(0.0, std.math.pi / 2.0, 0.0),
+        .camera_forward = Vec3f.xyz(0.0, 0.0, -1.0),
     };
 
     const max_updates_per_loop = 8;
@@ -143,6 +143,8 @@ pub fn main() !void {
     var simulation_time: f64 = 0.0;
     var accumulated_update_time: f64 = 0.0;
     var prev_time: f64 = glfw.getTime();
+    const cursor = window.getCursorPos();
+    var input_mouse_last = Vec2f.xy(@floatCast(cursor.xpos), @floatCast(cursor.ypos));
     while (!window.shouldClose()) {
         const curr_time = glfw.getTime();
         const delta_time = curr_time - prev_time;
@@ -152,7 +154,7 @@ pub fn main() !void {
 
         var update_count: u8 = 0;
         while (accumulated_update_time >= fixed_time_step and update_count <= max_updates_per_loop) {
-            update(&game_state, &window, simulation_time, delta_time);
+            update(&game_state, &window, simulation_time, delta_time, &input_mouse_last);
             accumulated_update_time -= fixed_time_step;
             simulation_time += fixed_time_step;
             update_count += 1;
@@ -167,17 +169,16 @@ pub fn main() !void {
 }
 
 // Funny temporary input impl
-var input_mouse_last = Vec2f{ 0.0, 0.0 };
 var input_mouse_cursor = false;
 
 fn keyToAxis(window: *const glfw.Window, key: glfw.Key) f32 {
     return if (window.getKey(key) == .press) 1.0 else 0.0;
 }
 
-fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64) void {
+fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64, input_mouse_last: *Vec2f) void {
     if (window.getKey(.one) == .press) {
         window.setCursorPos(0.0, 0.0);
-        input_mouse_last = Vec2f{ 0.0, 0.0 };
+        input_mouse_last.* = Vec2f.xy(0.0, 0.0);
         window.setInputModeCursor(.disabled);
         input_mouse_cursor = false;
     } else if (window.getKey(.two) == .press) {
@@ -189,31 +190,33 @@ fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64) void {
 
     const mouse_sensitivity = 0.3;
     const mouse_pos_glfw = window.getCursorPos();
-    const mouse_position = Vec2f{ @floatCast(mouse_pos_glfw.xpos), @floatCast(mouse_pos_glfw.ypos) };
-    const mouse_delta = zm.vec.scale(mouse_position - input_mouse_last, @as(f32, @floatCast(dt)) * mouse_sensitivity);
-    input_mouse_last = mouse_position;
+    const mouse_position = Vec2f.xy(@floatCast(mouse_pos_glfw.xpos), @floatCast(mouse_pos_glfw.ypos));
+    const mouse_delta = mouse_position.sub(input_mouse_last)
+        .mul(@as(f32, @floatCast(dt)) * mouse_sensitivity);
+    input_mouse_last.* = mouse_position;
 
-    state.player_rotation[0] += mouse_delta[1]; // Pitch
-    state.player_rotation[1] += mouse_delta[0]; // Yaw
+    state.player_rotation.x += mouse_delta.y; // Pitch
+    state.player_rotation.y += mouse_delta.x; // Yaw
 
-    state.camera_forward = zm.vec.normalize(Vec3f{
-        std.math.cos(state.player_rotation[1]) * std.math.cos(state.player_rotation[0]),
-        std.math.sin(state.player_rotation[0]),
-        std.math.sin(state.player_rotation[1]) * std.math.cos(state.player_rotation[0]),
-    });
-    const camera_right = zm.vec.normalize(zm.vec.cross(zm.vec.up(f32), state.camera_forward));
-    const camera_up = zm.vec.normalize(zm.vec.cross(state.camera_forward, camera_right));
+    state.camera_forward = Vec3f.xyz(
+        math.cos(state.player_rotation.y) * math.cos(state.player_rotation.x),
+        math.sin(state.player_rotation.x),
+        math.sin(state.player_rotation.y) * math.cos(state.player_rotation.x),
+    ).normalize();
+
+    const camera_right = Vec3f.up.cross(state.camera_forward).normalize();
+    const camera_up = state.camera_forward.cross(camera_right).normalize();
 
     const movement_speed: f32 = 100.0;
-    const delta_velocity = zm.vec.scale(Vec3f{
+    const delta_velocity = Vec3f.xyz(
         -keyToAxis(window, .a) + keyToAxis(window, .d),
         -keyToAxis(window, .left_control) + keyToAxis(window, .space),
         -keyToAxis(window, .s) + keyToAxis(window, .w),
-    }, @as(f32, @floatCast(dt)) * movement_speed);
+    ).mul(@as(f32, @floatCast(dt)) * movement_speed);
 
-    state.player_position += zm.vec.scale(camera_right, delta_velocity[0]);
-    state.player_position += zm.vec.scale(camera_up, delta_velocity[1]);
-    state.player_position += zm.vec.scale(state.camera_forward, -delta_velocity[2]);
+    state.player_position.addAssign(camera_right.mul(delta_velocity.x));
+    state.player_position.addAssign(camera_up.mul(delta_velocity.y));
+    state.player_position.addAssign(state.camera_forward.mul(-delta_velocity.z));
     _ = t;
 }
 
@@ -228,8 +231,8 @@ fn render(
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
 
-    const up = Vec3f{ 0.0, 1.0, 0.0 };
-    const look_at = game_state.player_position - game_state.camera_forward;
+    const up = Vec3f.xyz(0.0, 1.0, 0.0);
+    const look_at = game_state.player_position.sub(game_state.camera_forward);
     // const fov_y = 45.0;
     const width: f32 = @floatFromInt(renderer.extent.width);
     const height: f32 = @floatFromInt(renderer.extent.height);
@@ -238,9 +241,9 @@ fn render(
     const far = 1000.0;
 
     frame.uniform_buffer_mapped.* = .{
-        .model = Matrix4(f32).fromMat4f(Mat4f.identity().transpose()),
-        .view = Matrix4(f32).fromMat4f(Mat4f.lookAt(game_state.player_position, look_at, up).transpose()),
-        .proj = Matrix4(f32).fromMat4f(Mat4f.perspective(std.math.pi / 4.0, aspect_ratio, near, far).transpose()),
+        .model = Mat4f.identity(),
+        .view = Mat4f.lookAt(game_state.player_position, look_at, up),
+        .proj = Mat4f.perspective(math.pi / 4.0, aspect_ratio, near, far),
     };
 
     try ctx.device.resetCommandBuffer(frame.command_buffer, .{});
@@ -286,7 +289,7 @@ fn render(
                 .image_view = renderer.depth_view,
                 .clear_value = vk.ClearValue{
                     .depth_stencil = .{
-                        .depth = 1.0,
+                        .depth = 0.0,
                         .stencil = 0.0,
                     },
                 },
@@ -377,18 +380,17 @@ const Block = worldgen.Block;
 const Chunk = worldgen.Chunk;
 const types = @import("types.zig");
 const GameState = types.GameState;
-const Matrix4 = types.Matrix4;
 
 const std = @import("std");
+const math = std.math;
 const ArrayList = std.ArrayList;
 const log = std.log.scoped(.main);
 const heap = std.heap;
 
 const vk = @import("vulkan");
 const glfw = @import("mach-glfw");
-const zm = @import("zm");
-const Vec2f = zm.Vec2f;
-const Vec3f = zm.Vec3f;
-const Vec4f = zm.Vec4f;
-const Mat4f = zm.Mat4f;
-const Quaternion = zm.Quaternion;
+const ftm = @import("math.zig");
+const Vec2f = ftm.Vec2fx;
+const Vec3f = ftm.Vec3fx;
+const Vec4f = ftm.Vec4fx;
+const Mat4f = ftm.Mat4f;

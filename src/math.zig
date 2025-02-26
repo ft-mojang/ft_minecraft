@@ -27,8 +27,18 @@ pub fn VecXY(comptime T: type) type {
             return @bitCast(self);
         }
 
+        /// Casts the vector pointer into it's more generic representation.
+        pub fn asGenericPtr(self: *Self) *GenericRepr {
+            return @alignCast(@ptrCast(self));
+        }
+
         /// Returns self. Exists for generics.
         pub fn asComponent(self: Self) Self {
+            return self;
+        }
+
+        /// Returns self. Exists for generics.
+        pub fn asComponentPtr(self: *Self) *Self {
             return self;
         }
 
@@ -52,6 +62,10 @@ pub fn VecXY(comptime T: type) type {
             return lhs.asGeneric().add(rhs).asComponent();
         }
 
+        pub fn addAssign(lhs: *Self, rhs: anytype) void {
+            return lhs.asGenericPtr().addAssign(rhs).asComponentPtr();
+        }
+
         pub fn sub(lhs: Self, rhs: anytype) Self {
             return lhs.asGeneric().sub(rhs).asComponent();
         }
@@ -69,7 +83,7 @@ pub fn VecXY(comptime T: type) type {
         }
 
         const GenericRepr = Vec(T, 2);
-        const Self = VecXYZ(T);
+        const Self = VecXY(T);
     };
 }
 
@@ -80,6 +94,7 @@ pub fn VecXYZ(comptime T: type) type {
         z: T,
 
         // Specialized
+        pub const up = Self.xyz(0, 1, 0);
 
         pub fn xyz(x: T, y: T, z: T) Self {
             return .{ .x = x, .y = y, .z = z };
@@ -102,8 +117,18 @@ pub fn VecXYZ(comptime T: type) type {
             return @bitCast(self);
         }
 
+        /// Casts the vector pointer into it's more generic representation.
+        pub fn asGenericPtr(self: *Self) *GenericRepr {
+            return @alignCast(@ptrCast(self));
+        }
+
         /// Returns self. Exists for generics.
         pub fn asComponent(self: Self) Self {
+            return self;
+        }
+
+        /// Returns self. Exists for generics.
+        pub fn asComponentPtr(self: *Self) *Self {
             return self;
         }
 
@@ -125,6 +150,10 @@ pub fn VecXYZ(comptime T: type) type {
 
         pub fn add(lhs: Self, rhs: anytype) Self {
             return lhs.asGeneric().add(rhs).asComponent();
+        }
+
+        pub fn addAssign(lhs: *Self, rhs: anytype) void {
+            return lhs.asGenericPtr().addAssign(rhs);
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
@@ -169,8 +198,18 @@ pub fn VecXYZW(comptime T: type) type {
             return @bitCast(self);
         }
 
+        /// Casts the vector pointer into it's more generic representation.
+        pub fn asGenericPtr(self: *Self) *GenericRepr {
+            return @alignCast(@ptrCast(self));
+        }
+
         /// Returns self. Exists for generics.
         pub fn asComponent(self: Self) Self {
+            return self;
+        }
+
+        /// Returns self. Exists for generics.
+        pub fn asComponentPtr(self: *Self) *Self {
             return self;
         }
 
@@ -192,6 +231,10 @@ pub fn VecXYZW(comptime T: type) type {
 
         pub fn add(lhs: Self, rhs: anytype) Self {
             return lhs.asGeneric().add(rhs).asComponent();
+        }
+
+        pub fn addAssign(lhs: *Self, rhs: anytype) void {
+            return lhs.asGenericPtr().addAssign(rhs).asComponentPtr();
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
@@ -250,12 +293,27 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             return self;
         }
 
-        /// Casts the vector into it's xyz[w] component representation.
+        /// Returns self. Exists for generics.
+        pub fn asGenericPtr(self: *Self) *Self {
+            return self;
+        }
+
+        /// Casts the vector into it's xy[zw] component representation.
         pub fn asComponent(self: Self) ComponentRepr {
             return switch (comptime N) {
-                2 => @as(VecXYZ(T), @bitCast(self)),
+                2 => @as(VecXY(T), @bitCast(self)),
                 3 => @as(VecXYZ(T), @bitCast(self)),
                 4 => @as(VecXYZW(T), @bitCast(self)),
+                else => @panic("compontent repr not defined"),
+            };
+        }
+
+        /// Casts the vector pointer into it's xy[zw] component representation.
+        pub fn asComponentPtr(self: *Self) *ComponentRepr {
+            return switch (comptime N) {
+                2 => @as(VecXY(T), @alignCast(@ptrCast(self))),
+                3 => @as(VecXYZ(T), @alignCast(@ptrCast(self))),
+                4 => @as(VecXYZW(T), @alignCast(@ptrCast(self))),
                 else => @panic("compontent repr not defined"),
             };
         }
@@ -290,11 +348,12 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             var out: [N]T = undefined;
 
             if (comptime isVector(@TypeOf(rhs))) {
+                const _rhs = rhs.asGeneric();
                 if (comptime use_simd) {
-                    return @bitCast(@as(VectorRepr, @bitCast(lhs)) - @as(VectorRepr, @bitCast(rhs)));
+                    return @bitCast(@as(VectorRepr, @bitCast(lhs)) - @as(VectorRepr, @bitCast(_rhs)));
                 }
 
-                inline for (&out, lhs.d, rhs.d) |*o, l, r| {
+                inline for (&out, lhs.d, _rhs.d) |*o, l, r| {
                     o.* = l - r;
                 }
 
@@ -317,11 +376,12 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             var out: [N]T = undefined;
 
             if (comptime isVector(@TypeOf(rhs))) {
+                const _rhs = rhs.asGeneric();
                 if (comptime use_simd) {
-                    return @bitCast(@as(VectorRepr, @bitCast(lhs)) + @as(VectorRepr, @bitCast(rhs)));
+                    return @bitCast(@as(VectorRepr, @bitCast(lhs)) + @as(VectorRepr, @bitCast(_rhs)));
                 }
 
-                inline for (&out, lhs.d, rhs.d) |*o, l, r| {
+                inline for (&out, lhs.d, _rhs.d) |*o, l, r| {
                     o.* = l + r;
                 }
 
@@ -337,6 +397,10 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             }
 
             return @bitCast(out);
+        }
+
+        pub fn addAssign(lhs: *Self, rhs: anytype) void {
+            lhs.* = lhs.add(rhs);
         }
 
         pub fn div(lhs: Self, rhs: T) Self {
@@ -366,10 +430,14 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
         }
 
         fn isVector(comptime U: type) bool {
-            if (comptime !meta.hasMethod(U, "asGeneric")) {
+            const _U = switch (@typeInfo(U)) {
+                .pointer => @typeInfo(U).pointer.child,
+                else => U,
+            };
+            if (comptime !meta.hasMethod(_U, "asGeneric")) {
                 return false;
             }
-            if (comptime @typeInfo(@TypeOf(U.asGeneric)).@"fn".return_type != Self) {
+            if (comptime @typeInfo(@TypeOf(_U.asGeneric)).@"fn".return_type != Self) {
                 return false;
             }
             return true;
@@ -429,9 +497,9 @@ pub fn Mat(comptime T: type, comptime N: usize) type {
 
             data[0][0] = 1 / (aspect_ratio * tan_half_fov_y);
             data[1][1] = 1 / (tan_half_fov_y);
-            data[2][2] = far / (near - far);
+            data[2][2] = -near / (near - far);
             data[2][3] = -1;
-            data[3][2] = -(far * near) / (far - near);
+            data[3][2] = (far * near) / (far - near);
 
             return Self{ .data = data };
         }

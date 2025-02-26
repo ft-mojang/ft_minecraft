@@ -450,7 +450,7 @@ fn createPipeline(
             .p_depth_stencil_state = &vk.PipelineDepthStencilStateCreateInfo {
                 .depth_test_enable = vk.TRUE,
                 .depth_write_enable = vk.TRUE,
-                .depth_compare_op = .less,
+                .depth_compare_op = .greater,
                 .depth_bounds_test_enable = vk.FALSE,
                 .min_depth_bounds = 0.0,
                 .max_depth_bounds = 1.0,
@@ -715,6 +715,8 @@ const Device = vulkan.Device;
 const Buffer = vulkan.vk_allocator.Buffer;
 const Image = vulkan.vk_allocator.Image;
 const UniformBufferObject = @import("../types.zig").UniformBufferObject;
+const ftm = @import("../math.zig");
+const Vec3f = ftm.Vec3fx;
 
 const builtin = @import("builtin");
 const std = @import("std");
@@ -726,5 +728,3 @@ const meta = std.meta;
 const Allocator = std.mem.Allocator;
 
 const vk = @import("vulkan");
-const zm = @import("zm");
-const Vec3f = zm.Vec3f;

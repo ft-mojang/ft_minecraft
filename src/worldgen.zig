@@ -160,14 +160,14 @@ pub const Chunk = struct {
                     const fy: f32 = @floatFromInt(y);
                     const fz: f32 = @floatFromInt(z);
 
-                    vertices[index * 8 + 0] = Vec3f{ fx + 0.0, fy + 0.0, fz + 0.0 }; // LEFT BOTT BACK
-                    vertices[index * 8 + 1] = Vec3f{ fx + 1.0, fy + 0.0, fz + 0.0 }; // RGHT BOTT BACK
-                    vertices[index * 8 + 2] = Vec3f{ fx + 0.0, fy + 1.0, fz + 0.0 }; // LEFT TOPP BACK
-                    vertices[index * 8 + 3] = Vec3f{ fx + 1.0, fy + 1.0, fz + 0.0 }; // RGHT TOPP BACK
-                    vertices[index * 8 + 4] = Vec3f{ fx + 0.0, fy + 0.0, fz + 1.0 }; // LEFT BOTT FRNT
-                    vertices[index * 8 + 5] = Vec3f{ fx + 1.0, fy + 0.0, fz + 1.0 }; // RGHT BOTT FRNT
-                    vertices[index * 8 + 6] = Vec3f{ fx + 0.0, fy + 1.0, fz + 1.0 }; // LEFT TOPP FRNT
-                    vertices[index * 8 + 7] = Vec3f{ fx + 1.0, fy + 1.0, fz + 1.0 }; // RGHT TOPP FRNT
+                    vertices[index * 8 + 0] = Vec3f.xyz(fx + 0.0, fy + 0.0, fz + 0.0); // LEFT BOTT BACK
+                    vertices[index * 8 + 1] = Vec3f.xyz(fx + 1.0, fy + 0.0, fz + 0.0); // RGHT BOTT BACK
+                    vertices[index * 8 + 2] = Vec3f.xyz(fx + 0.0, fy + 1.0, fz + 0.0); // LEFT TOPP BACK
+                    vertices[index * 8 + 3] = Vec3f.xyz(fx + 1.0, fy + 1.0, fz + 0.0); // RGHT TOPP BACK
+                    vertices[index * 8 + 4] = Vec3f.xyz(fx + 0.0, fy + 0.0, fz + 1.0); // LEFT BOTT FRNT
+                    vertices[index * 8 + 5] = Vec3f.xyz(fx + 1.0, fy + 0.0, fz + 1.0); // RGHT BOTT FRNT
+                    vertices[index * 8 + 6] = Vec3f.xyz(fx + 0.0, fy + 1.0, fz + 1.0); // LEFT TOPP FRNT
+                    vertices[index * 8 + 7] = Vec3f.xyz(fx + 1.0, fy + 1.0, fz + 1.0); // RGHT TOPP FRNT
 
                     indices[index * 36 + 0] = index * 8 + 0; // BACK FACE
                     indices[index * 36 + 1] = index * 8 + 1;
@@ -220,11 +220,10 @@ const Fp = f64;
 
 const fastnoise = @import("worldgen/fastnoise.zig");
 const Noise = fastnoise.Noise(Fp);
+const ftm = @import("math.zig");
+const Vec3f = ftm.Vec3fx;
 
 const std = @import("std");
 const debug = std.debug;
 const math = std.math;
 const Allocator = std.mem.Allocator;
-
-const zm = @import("zm");
-const Vec3f = zm.Vec3f;
