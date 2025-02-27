@@ -256,7 +256,8 @@ fn render(
     const far = 1000.0;
 
     frame.uniform_buffer_mapped.* = .{
-        .model = Mat4f.translate(Vec3f.xyz(0, 0, -100)),
+        .model = Mat4f.translate(Vec3f.xyz(0, 0, -100))
+            .mul(Mat4f.rotate(math.degreesToRadians(0), Vec3f.xyz(1, 0, 0))),
         .view = Mat4f.lookAt(game_state.player_position, look_at, up),
         .proj = Mat4f.perspective(math.pi / 4.0, aspect_ratio, near, far),
     };

@@ -42,6 +42,14 @@ pub fn VecXY(comptime T: type) type {
             return self;
         }
 
+        pub fn asVector(self: Self) GenericRepr.VectorRepr {
+            return self.asGeneric().asVector();
+        }
+
+        pub fn fromVector(vector: GenericRepr.VectorRepr) Self {
+            return GenericRepr{ .d = vector };
+        }
+
         pub fn zero() Self {
             return GenericRepr.scalar(0).asComponent();
         }
@@ -132,6 +140,14 @@ pub fn VecXYZ(comptime T: type) type {
             return self;
         }
 
+        pub fn asVector(self: Self) GenericRepr.VectorRepr {
+            return self.asGeneric().asVector();
+        }
+
+        pub fn fromVector(vector: GenericRepr.VectorRepr) Self {
+            return GenericRepr{ .d = vector };
+        }
+
         pub fn zero() Self {
             return GenericRepr.scalar(0).asComponent();
         }
@@ -211,6 +227,14 @@ pub fn VecXYZW(comptime T: type) type {
         /// Returns self. Exists for generics.
         pub fn asComponentPtr(self: *Self) *Self {
             return self;
+        }
+
+        pub fn asVector(self: Self) GenericRepr.VectorRepr {
+            return self.asGeneric().asVector();
+        }
+
+        pub fn fromVector(vector: GenericRepr.VectorRepr) Self {
+            return GenericRepr{ .d = vector };
         }
 
         pub fn zero() Self {
@@ -316,6 +340,14 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
                 4 => @as(VecXYZW(T), @alignCast(@ptrCast(self))),
                 else => @panic("compontent repr not defined"),
             };
+        }
+
+        pub fn asVector(self: Self) VectorRepr {
+            return self.d;
+        }
+
+        pub fn fromVector(vector: @Vector(N, T)) Self {
+            return .{ .d = vector };
         }
 
         pub fn dot(lhs: Self, rhs: anytype) T {
@@ -519,45 +551,45 @@ pub fn Mat(comptime T: type, comptime N: usize) type {
             return .{ .data = data };
         }
 
-        // TODO: Needs support for Vec*arr
-        //        pub fn rotate(radians: f32, axis: anytype) Self {
-        //            const a = radians;
-        //            const c = @cos(a);
-        //            const s = @sin(a);
-        //            const _axis = axis.asComponent().normalize();
-        //            const temp = _axis.mul(1.0 - c);
-        //
-        //            var rot = Self.zero().data;
-        //            rot[0][0] = c + temp.x * axis.x;
-        //            rot[0][1] = temp.x * axis.y + s * axis.z;
-        //            rot[0][2] = temp.x * axis.z - s * axis.y;
-        //
-        //            rot[1][0] = temp.y * axis.x - s * axis.z;
-        //            rot[1][1] = c + temp.y * axis.y;
-        //            rot[1][2] = temp.y * axis.z + s * axis.x;
-        //
-        //            rot[2][0] = temp.z * axis.x + s * axis.y;
-        //            rot[2][1] = temp.z * axis.y - s * axis.x;
-        //            rot[2][2] = c + temp.z * axis.z;
-        //
-        //            const ident = Self.identity().data;
-        //            var result = Self.zero().data;
-        //
-        //            result[0] = @bitCast(ident[0].mul(rot[0][0]).add(ident[1].mul(rot[0][1])).add(ident[2].mul(rot[0][2])));
-        //            result[1] = @bitCast(ident[0].mul(rot[1][0]).add(ident[1].mul(rot[1][1])).add(ident[2].mul(rot[1][2])));
-        //            result[2] = @bitCast(ident[0].mul(rot[2][0]).add(ident[1].mul(rot[2][1])).add(ident[2].mul(rot[2][2])));
-        //            result[3] = ident[3];
-        //
-        //            return .{ .data = result };
-        //        }
+        pub fn rotate(radians: f32, axis: anytype) Self {
+            const a = radians;
+            const c = @cos(a);
+            const s = @sin(a);
+            const _axis = axis.asComponent().normalize();
+            const temp = _axis.mul(1.0 - c);
 
-        pub fn perspective(fov_y: T, aspect_ratio: T, near: T, far: T) Self {
+            var rot = Self.zero().data;
+            rot[0][0] = c + temp.x * axis.x;
+            rot[0][1] = temp.x * axis.y + s * axis.z;
+            rot[0][2] = temp.x * axis.z - s * axis.y;
+
+            rot[1][0] = temp.y * axis.x - s * axis.z;
+            rot[1][1] = c + temp.y * axis.y;
+            rot[1][2] = temp.y * axis.z + s * axis.x;
+
+            rot[2][0] = temp.z * axis.x + s * axis.y;
+            rot[2][1] = temp.z * axis.y - s * axis.x;
+            rot[2][2] = c + temp.z * axis.z;
+
+            const ident: [N]VecXYZW(T) = @bitCast(Self.identity().data);
+            var result = Self.zero().data;
+
+            result[0] = @bitCast(ident[0].mul(rot[0][0]).add(ident[1].mul(rot[0][1])).add(ident[2].mul(rot[0][2])));
+            result[1] = @bitCast(ident[0].mul(rot[1][0]).add(ident[1].mul(rot[1][1])).add(ident[2].mul(rot[1][2])));
+            result[2] = @bitCast(ident[0].mul(rot[2][0]).add(ident[1].mul(rot[2][1])).add(ident[2].mul(rot[2][2])));
+            result[3] = @bitCast(ident[3]);
+
+            return .{ .data = result };
+        }
+
+        /// Right-handed perspective projection with one to zero depth range.
+        pub fn perspective(fov_y_radians: T, aspect_ratio: T, near: T, far: T) Self {
             if (comptime N != 4) {
                 @compileError("perspective projection must be a 4x4 Matrix");
             }
 
             var data = Self.zero().data;
-            const tan_half_fov_y = @tan(fov_y / 2);
+            const tan_half_fov_y = @tan(fov_y_radians / 2);
 
             data[0][0] = 1 / (aspect_ratio * tan_half_fov_y);
             data[1][1] = 1 / (tan_half_fov_y);
@@ -614,7 +646,20 @@ pub fn Mat(comptime T: type, comptime N: usize) type {
             return .{ .data = data };
         }
 
+        pub fn asZm(self: Self) ZmRepr {
+            return (ZmRepr{ .data = @as([16]T, @bitCast(self.data)) }).transpose();
+        }
+
+        pub fn fromZm(matrix: anytype) Self {
+            return .{ .data = @as([4][4]T, @bitCast(matrix.transpose().data)) };
+        }
+
         const Self = Mat(T, N);
+        const ZmRepr = switch (T) {
+            f64 => zm.Mat4,
+            f32 => zm.Mat4f,
+            else => @panic("unsupported zm conversion"),
+        };
     };
 }
 
@@ -676,7 +721,18 @@ test "vector division" {
     try testing.expect(meta.eql(a.div(2), Vec4fx.xyzw(1, 2, 3, 4)));
 }
 
+test "as / from vector" {
+    _ = Vec4f.fromVector(Vec4f.zero().asVector());
+    _ = Vec3f.fromVector(Vec3f.zero().asVector());
+    _ = Vec2f.fromVector(Vec2f.zero().asVector());
+}
+
+test "as / from zm matrix" {
+    _ = Mat4f.fromZm(Mat4f.zero().asZm());
+}
+
 const std = @import("std");
+const zm = @import("zm");
 const math = std.math;
 const meta = std.meta;
 const debug = std.debug;
