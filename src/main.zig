@@ -138,7 +138,10 @@ pub fn main() !void {
     var game_state = GameState{
         .player_position = Vec3f.xyz(0.0, 32.0, 0.0),
         .player_rotation = Vec3f.xyz(0.0, std.math.pi / 2.0, 0.0),
-        .camera_forward = Vec3f.xyz(0.0, 0.0, -1.0),
+
+        .camera_x = Vec3f.scalar(0.0),
+        .camera_y = Vec3f.scalar(0.0),
+        .camera_z = Vec3f.scalar(0.0),
     };
 
     const max_updates_per_loop = 8;
@@ -201,14 +204,23 @@ fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64, input_
     state.player_rotation.x += mouse_delta.y; // Pitch
     state.player_rotation.y += mouse_delta.x; // Yaw
 
-    state.camera_forward = Vec3f.xyz(
+    const pitch_min = -std.math.pi * 0.5;
+    const pitch_max = std.math.pi * 0.5;
+    state.player_rotation.x = std.math.clamp(state.player_rotation.x, pitch_min, pitch_max);
+
+    state.camera_z = Vec3f.xyz(
         math.cos(state.player_rotation.y) * math.cos(state.player_rotation.x),
         math.sin(state.player_rotation.x),
         math.sin(state.player_rotation.y) * math.cos(state.player_rotation.x),
     ).normalize();
 
-    const camera_right = Vec3f.up.cross(state.camera_forward).normalize();
-    const camera_up = state.camera_forward.cross(camera_right).normalize();
+    state.camera_x = Vec3f.xyz(
+        math.sin(state.player_rotation.y),
+        0,
+        -math.cos(state.player_rotation.y),
+    ).normalize();
+
+    state.camera_y = state.camera_z.cross(state.camera_x).normalize();
 
     const movement_speed: f32 = 100.0;
     const delta_velocity = Vec3f.xyz(
@@ -217,9 +229,9 @@ fn update(state: *GameState, window: *const glfw.Window, t: f64, dt: f64, input_
         -keyToAxis(window, .s) + keyToAxis(window, .w),
     ).mul(@as(f32, @floatCast(dt)) * movement_speed);
 
-    state.player_position.addAssign(camera_right.mul(delta_velocity.x));
-    state.player_position.addAssign(camera_up.mul(delta_velocity.y));
-    state.player_position.addAssign(state.camera_forward.mul(-delta_velocity.z));
+    state.player_position.addAssign(state.camera_x.mul(delta_velocity.x));
+    state.player_position.addAssign(state.camera_y.mul(delta_velocity.y));
+    state.player_position.addAssign(state.camera_z.mul(-delta_velocity.z));
     _ = t;
 }
 
@@ -234,8 +246,8 @@ fn render(
     // TODO: Blocks until frame acquired, maybe should be in or before non-fixed update?
     const frame = try renderer.acquireFrame(ctx);
 
-    const up = Vec3f.xyz(0.0, 1.0, 0.0);
-    const look_at = game_state.player_position.sub(game_state.camera_forward);
+    const up = game_state.camera_y;
+    const look_at = game_state.player_position.sub(game_state.camera_z);
     // const fov_y = 45.0;
     const width: f32 = @floatFromInt(renderer.extent.width);
     const height: f32 = @floatFromInt(renderer.extent.height);

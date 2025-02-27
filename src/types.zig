@@ -7,7 +7,10 @@ pub const UniformBufferObject = extern struct {
 pub const GameState = struct {
     player_position: Vec3f,
     player_rotation: Vec3f,
-    camera_forward: Vec3f,
+
+    camera_x: Vec3f,
+    camera_y: Vec3f,
+    camera_z: Vec3f,
 };
 
 const std = @import("std");
