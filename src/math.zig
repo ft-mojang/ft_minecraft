@@ -71,19 +71,31 @@ pub fn VecXY(comptime T: type) type {
         }
 
         pub fn addAssign(lhs: *Self, rhs: anytype) void {
-            return lhs.asGenericPtr().addAssign(rhs).asComponentPtr();
+            lhs.asGenericPtr().addAssign(rhs);
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
             return lhs.asGeneric().sub(rhs).asComponent();
         }
 
-        pub fn div(lhs: Self, rhs: anytype) Self {
+        pub fn subAssign(lhs: *Self, rhs: anytype) void {
+            lhs.asGenericPtr().subAssign(rhs);
+        }
+
+        pub fn div(lhs: Self, rhs: T) Self {
             return lhs.asGeneric().div(rhs).asComponent();
         }
 
-        pub fn mul(lhs: Self, rhs: anytype) Self {
+        pub fn divAssign(lhs: *Self, rhs: T) void {
+            lhs.asGenericPtr().divAssign(rhs);
+        }
+
+        pub fn mul(lhs: Self, rhs: T) Self {
             return lhs.asGeneric().mul(rhs).asComponent();
+        }
+
+        pub fn mulAssign(lhs: *Self, rhs: T) void {
+            lhs.asGenericPtr().mulAssign(rhs);
         }
 
         pub fn normalize(self: Self) Self {
@@ -169,19 +181,31 @@ pub fn VecXYZ(comptime T: type) type {
         }
 
         pub fn addAssign(lhs: *Self, rhs: anytype) void {
-            return lhs.asGenericPtr().addAssign(rhs);
+            lhs.asGenericPtr().addAssign(rhs);
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
             return lhs.asGeneric().sub(rhs).asComponent();
         }
 
-        pub fn div(lhs: Self, rhs: anytype) Self {
+        pub fn subAssign(lhs: *Self, rhs: anytype) void {
+            lhs.asGenericPtr().subAssign(rhs);
+        }
+
+        pub fn div(lhs: Self, rhs: T) Self {
             return lhs.asGeneric().div(rhs).asComponent();
         }
 
-        pub fn mul(lhs: Self, rhs: anytype) Self {
+        pub fn divAssign(lhs: *Self, rhs: T) void {
+            lhs.asGenericPtr().divAssign(rhs);
+        }
+
+        pub fn mul(lhs: Self, rhs: T) Self {
             return lhs.asGeneric().mul(rhs).asComponent();
+        }
+
+        pub fn mulAssign(lhs: *Self, rhs: T) void {
+            lhs.asGenericPtr().mulAssign(rhs);
         }
 
         pub fn normalize(self: Self) Self {
@@ -258,19 +282,31 @@ pub fn VecXYZW(comptime T: type) type {
         }
 
         pub fn addAssign(lhs: *Self, rhs: anytype) void {
-            return lhs.asGenericPtr().addAssign(rhs).asComponentPtr();
+            lhs.asGenericPtr().addAssign(rhs);
         }
 
         pub fn sub(lhs: Self, rhs: anytype) Self {
             return lhs.asGeneric().sub(rhs).asComponent();
         }
 
-        pub fn div(lhs: Self, rhs: anytype) Self {
+        pub fn subAssign(lhs: *Self, rhs: anytype) void {
+            lhs.asGenericPtr().subAssign(rhs);
+        }
+
+        pub fn div(lhs: Self, rhs: T) Self {
             return lhs.asGeneric().div(rhs).asComponent();
         }
 
-        pub fn mul(lhs: Self, rhs: anytype) Self {
+        pub fn divAssign(lhs: *Self, rhs: T) void {
+            lhs.asGenericPtr().divAssign(rhs);
+        }
+
+        pub fn mul(lhs: Self, rhs: T) Self {
             return lhs.asGeneric().mul(rhs).asComponent();
+        }
+
+        pub fn mulAssign(lhs: *Self, rhs: T) void {
+            lhs.asGenericPtr().mulAssign(rhs);
         }
 
         pub fn normalize(self: Self) Self {
@@ -403,6 +439,10 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             return @bitCast(out);
         }
 
+        pub fn subAssign(lhs: *Self, rhs: anytype) void {
+            lhs.* = lhs.sub(rhs);
+        }
+
         pub fn add(lhs: Self, rhs: anytype) Self {
             const use_simd = comptime @sizeOf(Self) == @sizeOf(VectorRepr);
             var out: [N]T = undefined;
@@ -448,6 +488,10 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             return @bitCast(out);
         }
 
+        pub fn divAssign(lhs: *Self, rhs: T) void {
+            lhs.* = lhs.div(rhs);
+        }
+
         pub fn mul(lhs: Self, rhs: T) Self {
             if (comptime @sizeOf(Self) == @sizeOf(VectorRepr)) {
                 return @bitCast(@as(VectorRepr, @bitCast(lhs)) * @as(VectorRepr, @splat(rhs)));
@@ -459,6 +503,10 @@ pub fn Vec(comptime T: type, comptime N: usize) type {
             }
 
             return @bitCast(out);
+        }
+
+        pub fn mulAssign(lhs: *Self, rhs: T) void {
+            lhs.* = lhs.mul(rhs);
         }
 
         fn isVector(comptime U: type) bool {
