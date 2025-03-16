@@ -51,7 +51,7 @@ pub fn main() !void {
     var vk_allocator = vulkan.Allocator.init(arena, vk_ctx);
     defer vk_allocator.deinit();
 
-    const world_size = 8;
+    const world_size = 20;
     var chunk_list = try ArrayList(Chunk).initCapacity(arena, world_size * world_size * world_size);
     defer chunk_list.deinit();
 
@@ -63,9 +63,9 @@ pub fn main() !void {
     for (0..world_size) |x| {
         for (0..world_size) |y| {
             for (0..world_size) |z| {
-                const chunk_x = @as(Chunk.Coord, @intCast(x)) - world_size / 2;
-                const chunk_y = @as(Chunk.Coord, @intCast(y)) - world_size / 2;
-                const chunk_z = @as(Chunk.Coord, @intCast(z)) - world_size / 2;
+                const chunk_x = @as(Chunk.Coord, @intCast(x));
+                const chunk_y = @as(Chunk.Coord, @intCast(y));
+                const chunk_z = @as(Chunk.Coord, @intCast(z));
                 chunk_list.appendAssumeCapacity(Chunk.generate(chunk_x, chunk_y, chunk_z));
 
                 var vertices, var indices = try chunk_list.items[chunk_list.items.len - 1].toMesh(arena);

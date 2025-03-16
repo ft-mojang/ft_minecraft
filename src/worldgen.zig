@@ -1,60 +1,12 @@
 /// World height measured in blocks. Must be a multiple of the size of a chunk.
-pub const world_height = 320;
+pub const world_height: Block.Coord = 320;
 
-/// Sums octaves of 2D noise and returns a normalized result in range -1 to 1 (inclusive)
-fn sampleLayeredNoise2d(
-    seed: i32,
-    x: Fp,
-    y: Fp,
-    amplitude: Fp,
-    frequency: Fp,
-    octave_count: u8,
-    persistence: Fp,
-    lacunarity: Fp,
-) Fp {
-    // Offset to avoid interference patterns between octaves when near zero
-    const octave_offset: Fp = @as(Fp, @floatFromInt(math.maxInt(@TypeOf(octave_count)))) / @as(Fp, @floatFromInt(octave_count));
-    var _amplitude: Fp = amplitude;
-    var _frequency: Fp = frequency;
-    var height_max: Fp = 0.0;
-    var height_sum: Fp = 0.0;
-    for (0..octave_count) |i| {
-        const offset = octave_offset * @as(Fp, @floatFromInt(i));
-        height_max += _amplitude;
-        height_sum += _amplitude * Noise.singleSimplexS2D(seed, _frequency * (x + offset), _frequency * (y + offset));
-        _amplitude *= persistence;
-        _frequency *= lacunarity;
-    }
-    return height_sum / height_max;
-}
-
-/// Sums octaves of 3D noise and returns a normalized result in range -1 to 1 (inclusive)
-fn sampleLayeredNoise3d(
-    seed: i32,
-    x: Fp,
-    y: Fp,
-    z: Fp,
-    amplitude: Fp,
-    frequency: Fp,
-    octave_count: u8,
-    persistence: Fp,
-    lacunarity: Fp,
-) Fp {
-    // Offset to avoid interference patterns between octaves when near zero
-    const octave_offset: Fp = @as(Fp, @floatFromInt(math.maxInt(@TypeOf(octave_count)))) / @as(Fp, @floatFromInt(octave_count));
-    var _amplitude: Fp = amplitude;
-    var _frequency: Fp = frequency;
-    var height_max: Fp = 0.0;
-    var height_sum: Fp = 0.0;
-    for (0..octave_count) |i| {
-        const offset = octave_offset * @as(Fp, @floatFromInt(i));
-        height_max += _amplitude;
-        height_sum += _amplitude * Noise.singleSimplexS3D(seed, _frequency * (x + offset), _frequency * (y + offset), _frequency * (z + offset));
-        _amplitude *= persistence;
-        _frequency *= lacunarity;
-    }
-    return height_sum / height_max;
-}
+pub const WorldPosition = struct {
+    /// Absolute position in block coordinates
+    abs: ftm.VecXYZ(Block.Coord),
+    /// Relative position within a block
+    rel: ftm.VecXYZ(f32),
+};
 
 /// Enum variants for all unique block types
 pub const Block = enum(u8) {
@@ -62,7 +14,7 @@ pub const Block = enum(u8) {
     stone,
 
     /// Valid range of block coordinates
-    pub const Coord = i32;
+    pub const Coord = u32;
 };
 
 pub const Chunk = struct {
@@ -85,25 +37,28 @@ pub const Chunk = struct {
 
     pub fn generate(chunk_x: Coord, chunk_y: Coord, chunk_z: Coord) Chunk {
         const seed = 0xdead;
+        const chunk_x_block = @as(Block.Coord, chunk_x) * size;
+        const chunk_y_block = @as(Block.Coord, chunk_y) * size;
+        const chunk_z_block = @as(Block.Coord, chunk_z) * size;
 
         var chunk: Chunk = undefined;
         for (0..size) |z| {
             for (0..size) |x| {
-                const block_x = @as(Block.Coord, chunk_x) * size + @as(Block.Coord, @intCast(x));
-                const block_z = @as(Block.Coord, chunk_z) * size + @as(Block.Coord, @intCast(z));
+                const block_x = chunk_x_block + x;
+                const block_z = chunk_z_block + z;
                 // Sample from the block center to avoid using integer coordinates as they collapse the perlin noise algorithm.
-                const sample_x: Fp = 0.5 + @as(Fp, @floatFromInt(block_x));
-                const sample_z: Fp = 0.5 + @as(Fp, @floatFromInt(block_z));
+                const sample_x: noise.Fp = 0.5 + @as(noise.Fp, @floatFromInt(block_x));
+                const sample_z: noise.Fp = 0.5 + @as(noise.Fp, @floatFromInt(block_z));
 
-                const continentalness = sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.002, 16, 0.5, 2.0);
+                const continentalness = noise.sampleLayeredNoise2d(seed, sample_x, sample_z, 1.0, 0.002, 16, 0.5, 2.0);
 
                 const squashing_factor = 0.01;
-                const height_offset = continentalness * 0.5 * world_height - 1;
+                const height_offset = (continentalness + 1) * world_height * 0.5;
 
                 for (0..size) |y| {
-                    const block_y = @as(Block.Coord, chunk_y) * size + @as(Block.Coord, @intCast(y));
-                    const sample_y: Fp = 0.5 + @as(Fp, @floatFromInt(block_y));
-                    var density = sampleLayeredNoise3d(seed, sample_x, sample_y, sample_z, 1.0, 0.001, 16, 0.5, 2.0);
+                    const block_y = chunk_y_block + y;
+                    const sample_y: noise.Fp = 0.5 + @as(noise.Fp, @floatFromInt(block_y));
+                    var density = noise.sampleLayeredNoise3d(seed, sample_x, sample_y, sample_z, 1.0, 0.001, 16, 0.5, 2.0);
                     density -= squashing_factor * (sample_y - height_offset);
                     chunk.blocks[(z * size + x) * size + y] = if (density > 0) .stone else .air;
                 }
@@ -213,17 +168,13 @@ pub const Chunk = struct {
     }
 
     /// Valid range of chunk coordinates
-    pub const Coord = i28;
+    pub const Coord = u28;
 };
 
-const Fp = f64;
-
-const fastnoise = @import("worldgen/fastnoise.zig");
-const Noise = fastnoise.Noise(Fp);
+const noise = @import("worldgen/noise.zig");
 const ftm = @import("math.zig");
 const Vec3f = ftm.Vec3fx;
 
 const std = @import("std");
 const debug = std.debug;
-const math = std.math;
 const Allocator = std.mem.Allocator;
