@@ -68,19 +68,6 @@ pub const Chunk = struct {
         return chunk;
     }
 
-    pub fn print(chunk: Chunk) void {
-        for (0..size) |z| {
-            for (0..size) |x| {
-                for (0..size) |y| {
-                    const block = chunk.blocks[(z * size + x) * size + y];
-                    debug.print("{}", .{@intFromEnum(block)});
-                }
-                debug.print("\n", .{});
-            }
-            debug.print("----------------\n", .{});
-        }
-    }
-
     pub fn toMesh(chunk: Chunk, allocator: Allocator) !struct { []Vec3f, []u32 } {
         const vertices = try allocator.alloc(Vec3f, volume * 8);
         const indices = try allocator.alloc(u32, volume * 36);
